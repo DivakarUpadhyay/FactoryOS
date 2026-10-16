@@ -1,0 +1,30 @@
+﻿Divakar FactoryOS — Production and OEE
+2026-10-15 09:20 to 2026-10-16 09:20 UTC
+Plant OEE,77.5%
+Availability,96.3%
+Performance,81.3%
+Quality,98.9%
+Good parts,"2,363"
+Scrap,27
+
+Machine,Area,Line,OEE %,Availability %,Performance %,Quality %,Good,Scrap,Run h,Down h,Parts/h
+Turning centre 3,Machining Hall,CNC Cell Line,54,89.3,63.7,95,38,2,1.05,0.13,36.3
+Turning centre 4,Machining Hall,CNC Cell Line,54,100,59.7,90.5,38,4,1.17,0,32.4
+Sprue picker robot,Moulding Hall,Injection Line,61.1,100,61.1,100,86,0,1.17,0,73.3
+Injection moulder 180 t,Moulding Hall,Injection Line,66.2,75.7,88.4,98.9,87,1,0.88,0.28,98.3
+Deburring cobot,Machining Hall,CNC Cell Line,70.1,88.9,78.8,100,84,0,1.04,0.13,81
+Pick-and-place 1,SMT Hall,SMT Line 1,76.3,100,76.3,100,115,0,1.17,0,98.1
+Stamping press 200 t,Moulding Hall,Injection Line,82.2,100,82.2,100,868,0,1.17,0,740.2
+Pick-and-place 2,SMT Hall,SMT Line 2,82.8,93.8,88.3,100,115,0,1.08,0.07,106
+5-axis CNC 1,Machining Hall,CNC Cell Line,85.5,100,87.8,97.4,38,1,1.17,0,32.4
+5-axis CNC 2,Machining Hall,CNC Cell Line,85.5,100,87.8,97.4,38,1,1.17,0,32.4
+Injection moulder 250 t,Moulding Hall,Injection Line,86.2,100,87.2,98.9,91,1,1.17,0,77.6
+Machine-tending robot,Machining Hall,CNC Cell Line,91.7,100,91.7,100,86,0,1.17,0,73.3
+Injection moulder 350 t,Moulding Hall,Injection Line,98.9,100,100,98.9,91,1,1.17,0,77.6
+AMR 1,Logistics,,,100,,100,11,0,1.17,0,9.4
+Reflow oven 1,SMT Hall,SMT Line 1,,100,,,0,0,1.17,0,0
+Packaging 2,SMT Hall,SMT Line 2,,88.4,,97.3,577,16,0.87,0.11,660.4
+Reflow oven 2,SMT Hall,SMT Line 2,,100,,,0,0,1.17,0,0
+
+Downtime: Not yet explained 90 min (33×)
+Downtime: Changeover / setup 5 min (3×)

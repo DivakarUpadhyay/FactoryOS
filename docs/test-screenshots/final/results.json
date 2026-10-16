@@ -1,0 +1,485 @@
+{
+ "pages": [
+  {
+   "page": "Overview",
+   "path": "/app",
+   "ok": true,
+   "ms": 1797,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "My dashboards",
+   "path": "/app/dashboards",
+   "ok": true,
+   "ms": 3893,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "AI assistant",
+   "path": "/app/assistant",
+   "ok": true,
+   "ms": 3820,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Plant & assets",
+   "path": "/app/plant",
+   "ok": true,
+   "ms": 3147,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Floor plan",
+   "path": "/app/floor",
+   "ok": true,
+   "ms": 2606,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "3D digital twin",
+   "path": "/app/twin",
+   "ok": true,
+   "ms": 4886,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Connectivity",
+   "path": "/app/connectivity",
+   "ok": true,
+   "ms": 4635,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Energy",
+   "path": "/app/energy",
+   "ok": true,
+   "ms": 5739,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Power quality",
+   "path": "/app/power",
+   "ok": true,
+   "ms": 3828,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Carbon / ESG",
+   "path": "/app/carbon",
+   "ok": true,
+   "ms": 3889,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Production & OEE",
+   "path": "/app/production",
+   "ok": true,
+   "ms": 7204,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Robotics & AGV",
+   "path": "/app/robotics",
+   "ok": true,
+   "ms": 5514,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Maintenance",
+   "path": "/app/maintenance",
+   "ok": true,
+   "ms": 4504,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Alarms",
+   "path": "/app/alarms",
+   "ok": true,
+   "ms": 3830,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Quality / SPC",
+   "path": "/app/quality",
+   "ok": true,
+   "ms": 5049,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Inventory",
+   "path": "/app/inventory",
+   "ok": true,
+   "ms": 5720,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Reports",
+   "path": "/app/reports",
+   "ok": true,
+   "ms": 6246,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Users",
+   "path": "/app/users",
+   "ok": true,
+   "ms": 4464,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Roles & permissions",
+   "path": "/app/roles",
+   "ok": true,
+   "ms": 4256,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Audit log",
+   "path": "/app/audit",
+   "ok": true,
+   "ms": 5735,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Settings",
+   "path": "/app/settings",
+   "ok": true,
+   "ms": 2221,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Plan, billing & API",
+   "path": "/app/account",
+   "ok": true,
+   "ms": 5617,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Platform overview",
+   "path": "/platform",
+   "ok": true,
+   "ms": 1463,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Tenants",
+   "path": "/platform/tenants",
+   "ok": true,
+   "ms": 3267,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Plans & pricing",
+   "path": "/platform/plans",
+   "ok": true,
+   "ms": 2914,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Billing",
+   "path": "/platform/billing",
+   "ok": true,
+   "ms": 7005,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Platform audit",
+   "path": "/platform/audit",
+   "ok": true,
+   "ms": 4069,
+   "overflow": false,
+   "consoleErrors": []
+  }
+ ],
+ "mobile": [
+  {
+   "page": "Overview",
+   "path": "/app",
+   "ok": true,
+   "ms": 3402,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "My dashboards",
+   "path": "/app/dashboards",
+   "ok": true,
+   "ms": 4176,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "AI assistant",
+   "path": "/app/assistant",
+   "ok": true,
+   "ms": 3309,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Plant & assets",
+   "path": "/app/plant",
+   "ok": true,
+   "ms": 3911,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Floor plan",
+   "path": "/app/floor",
+   "ok": true,
+   "ms": 3497,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "3D digital twin",
+   "path": "/app/twin",
+   "ok": true,
+   "ms": 1493,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Connectivity",
+   "path": "/app/connectivity",
+   "ok": true,
+   "ms": 3011,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Energy",
+   "path": "/app/energy",
+   "ok": true,
+   "ms": 7025,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Power quality",
+   "path": "/app/power",
+   "ok": true,
+   "ms": 3999,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Carbon / ESG",
+   "path": "/app/carbon",
+   "ok": true,
+   "ms": 4657,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Production & OEE",
+   "path": "/app/production",
+   "ok": true,
+   "ms": 4038,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Robotics & AGV",
+   "path": "/app/robotics",
+   "ok": true,
+   "ms": 3917,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Maintenance",
+   "path": "/app/maintenance",
+   "ok": true,
+   "ms": 6220,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Alarms",
+   "path": "/app/alarms",
+   "ok": true,
+   "ms": 4662,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Quality / SPC",
+   "path": "/app/quality",
+   "ok": true,
+   "ms": 3804,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Inventory",
+   "path": "/app/inventory",
+   "ok": true,
+   "ms": 5411,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Reports",
+   "path": "/app/reports",
+   "ok": true,
+   "ms": 4659,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Users",
+   "path": "/app/users",
+   "ok": true,
+   "ms": 3599,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Roles & permissions",
+   "path": "/app/roles",
+   "ok": true,
+   "ms": 4925,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Audit log",
+   "path": "/app/audit",
+   "ok": true,
+   "ms": 4917,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Settings",
+   "path": "/app/settings",
+   "ok": true,
+   "ms": 4377,
+   "overflow": false,
+   "consoleErrors": []
+  },
+  {
+   "page": "Plan, billing & API",
+   "path": "/app/account",
+   "ok": true,
+   "ms": 3959,
+   "overflow": false,
+   "consoleErrors": []
+  }
+ ],
+ "api": [
+  {
+   "endpoint": "/api/v1/plant/tree",
+   "p50": 16,
+   "p95": 26,
+   "min": 6
+  },
+  {
+   "endpoint": "/api/v1/plant/floor",
+   "p50": 31,
+   "p95": 42,
+   "min": 16
+  },
+  {
+   "endpoint": "/api/v1/connectivity",
+   "p50": 9,
+   "p95": 33,
+   "min": 5
+  },
+  {
+   "endpoint": "/api/v1/energy/summary",
+   "p50": 1567,
+   "p95": 1650,
+   "min": 1486
+  },
+  {
+   "endpoint": "/api/v1/energy/power-quality",
+   "p50": 135,
+   "p95": 168,
+   "min": 127
+  },
+  {
+   "endpoint": "/api/v1/energy/carbon",
+   "p50": 525,
+   "p95": 729,
+   "min": 480
+  },
+  {
+   "endpoint": "/api/v1/production/oee",
+   "p50": 421,
+   "p95": 712,
+   "min": 384
+  },
+  {
+   "endpoint": "/api/v1/production/work-orders",
+   "p50": 6,
+   "p95": 55,
+   "min": 5
+  },
+  {
+   "endpoint": "/api/v1/robotics/fleet",
+   "p50": 170,
+   "p95": 217,
+   "min": 159
+  },
+  {
+   "endpoint": "/api/v1/alarms/summary",
+   "p50": 5,
+   "p95": 5,
+   "min": 4
+  },
+  {
+   "endpoint": "/api/v1/maintenance/kpis",
+   "p50": 162,
+   "p95": 177,
+   "min": 135
+  },
+  {
+   "endpoint": "/api/v1/quality/summary",
+   "p50": 16,
+   "p95": 38,
+   "min": 12
+  },
+  {
+   "endpoint": "/api/v1/inventory/items",
+   "p50": 16,
+   "p95": 41,
+   "min": 4
+  },
+  {
+   "endpoint": "/api/v1/reports/production",
+   "p50": 406,
+   "p95": 424,
+   "min": 389
+  }
+ ],
+ "errors": []
+}

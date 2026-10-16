@@ -1,0 +1,66 @@
+[
+ {
+  "file": "01-setup-page.png",
+  "caption": "The setup page loads with name, email, password and repeat-password fields."
+ },
+ {
+  "file": "02-password-mismatch.png",
+  "caption": "Passwords that don't match are caught in the browser; nothing is sent."
+ },
+ {
+  "file": "03-weak-password.png",
+  "caption": "A weak password is refused by the server with a clear message."
+ },
+ {
+  "file": "04-invalid-email.png",
+  "caption": "An invalid email address can't be submitted (browser validation bubble)."
+ },
+ {
+  "file": "05-platform-overview.png",
+  "caption": "Account created: the operator lands in the platform console overview."
+ },
+ {
+  "file": "06-tenants.png",
+  "caption": "Tenants page opens (empty: no factory companies yet)."
+ },
+ {
+  "file": "07-new-tenant-form.png",
+  "caption": "The New tenant form (company, plan, country and its first administrator). Closed without saving."
+ },
+ {
+  "file": "08-plans.png",
+  "caption": "Plans & pricing page shows the four plans with limits and modules."
+ },
+ {
+  "file": "09-audit-log.png",
+  "caption": "The audit log recorded the setup and the sign-in, with time and IP address."
+ },
+ {
+  "file": "10-signed-out.png",
+  "caption": "Signed out. The 'first-time setup' link no longer appears because an operator now exists."
+ },
+ {
+  "file": "11-wrong-password.png",
+  "caption": "A wrong password is refused without revealing whether the email exists."
+ },
+ {
+  "file": "12-signed-in-again.png",
+  "caption": "Signed in again with the right password."
+ },
+ {
+  "file": "13-after-reload.png",
+  "caption": "Still signed in after reloading the page (session restored automatically)."
+ },
+ {
+  "file": "14-audit-after.png",
+  "caption": "The audit log now also shows the failed and the successful sign-in."
+ },
+ {
+  "file": "15-second-setup-refused.png",
+  "caption": "Running setup a second time is refused: 'The platform is already set up.'"
+ },
+ {
+  "file": "16-phone-width.png",
+  "caption": "The setup page on a phone-width screen."
+ }
+]

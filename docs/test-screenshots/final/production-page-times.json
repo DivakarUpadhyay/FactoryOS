@@ -1,0 +1,72 @@
+[
+ {
+  "path": "/app",
+  "firstMs": 185,
+  "repeatMs": 160
+ },
+ {
+  "path": "/app/dashboards",
+  "firstMs": 178,
+  "repeatMs": 145
+ },
+ {
+  "path": "/app/floor",
+  "firstMs": 170,
+  "repeatMs": 156
+ },
+ {
+  "path": "/app/twin",
+  "firstMs": 218,
+  "repeatMs": 161
+ },
+ {
+  "path": "/app/connectivity",
+  "firstMs": 67,
+  "repeatMs": 152
+ },
+ {
+  "path": "/app/energy",
+  "firstMs": 949,
+  "repeatMs": 948
+ },
+ {
+  "path": "/app/production",
+  "firstMs": 956,
+  "repeatMs": 915
+ },
+ {
+  "path": "/app/robotics",
+  "firstMs": 401,
+  "repeatMs": 419
+ },
+ {
+  "path": "/app/maintenance",
+  "firstMs": 446,
+  "repeatMs": 433
+ },
+ {
+  "path": "/app/alarms",
+  "firstMs": 139,
+  "repeatMs": 146
+ },
+ {
+  "path": "/app/quality",
+  "firstMs": 200,
+  "repeatMs": 155
+ },
+ {
+  "path": "/app/inventory",
+  "firstMs": 186,
+  "repeatMs": 188
+ },
+ {
+  "path": "/app/reports",
+  "firstMs": 79,
+  "repeatMs": 150
+ },
+ {
+  "path": "/app/settings",
+  "firstMs": 204,
+  "repeatMs": 168
+ }
+]

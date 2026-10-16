@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>c909c999-6fac-4771-8993-cff74842920f</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.13" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.13" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.13" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Divakar.FactoryOS.Application\Divakar.FactoryOS.Application.csproj" />
+    <ProjectReference Include="..\Divakar.FactoryOS.Infrastructure\Divakar.FactoryOS.Infrastructure.csproj" />
+    <ProjectReference Include="..\Divakar.FactoryOS.Connectors\Divakar.FactoryOS.Connectors.csproj" />
+  </ItemGroup>
+
+</Project>

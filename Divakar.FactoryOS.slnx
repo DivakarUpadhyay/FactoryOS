@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Divakar.FactoryOS.Api/Divakar.FactoryOS.Api.csproj" />
+    <Project Path="src/Divakar.FactoryOS.Application/Divakar.FactoryOS.Application.csproj" />
+    <Project Path="src/Divakar.FactoryOS.Connectors/Divakar.FactoryOS.Connectors.csproj" />
+    <Project Path="src/Divakar.FactoryOS.Domain/Divakar.FactoryOS.Domain.csproj" />
+    <Project Path="src/Divakar.FactoryOS.Infrastructure/Divakar.FactoryOS.Infrastructure.csproj" />
+    <Project Path="src/Divakar.FactoryOS.Worker/Divakar.FactoryOS.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Divakar.FactoryOS.IntegrationTests/Divakar.FactoryOS.IntegrationTests.csproj" />
+    <Project Path="tests/Divakar.FactoryOS.UnitTests/Divakar.FactoryOS.UnitTests.csproj" />
+  </Folder>
+</Solution>

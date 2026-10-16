@@ -1,0 +1,56 @@
+# Divakar FactoryOS on Docker: SQL Server, API, worker and web.
+# Not run on the development PC (Docker is not installed there) — check it on your server before relying on it.
+#   cd deploy/docker
+#   copy .env.example to .env and fill in the passwords
+#   docker compose up -d --build
+services:
+  sql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${SQL_SA_PASSWORD}
+    volumes: [sqldata:/var/opt/mssql]
+    ports: ["1433:1433"]
+    restart: unless-stopped
+
+  api:
+    build: { context: ../.., dockerfile: deploy/docker/Dockerfile.api }
+    environment:
+      FACTORYOS_ConnectionStrings__FactoryOS: "Server=sql;Database=DivakarFactoryOS;User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=true"
+      FACTORYOS_Jwt__SigningKey: ${JWT_SIGNING_KEY}
+      FACTORYOS_Cors__Origins__0: ${WEB_ORIGIN}
+      FACTORYOS_Ai__AnthropicApiKey: ${ANTHROPIC_API_KEY:-}
+      FACTORYOS_Smtp__Host: ${SMTP_HOST:-}
+      FACTORYOS_Smtp__User: ${SMTP_USER:-}
+      FACTORYOS_Smtp__Password: ${SMTP_PASSWORD:-}
+      FACTORYOS_Smtp__From: ${SMTP_FROM:-alerts@example.com}
+      # first-time setup is only allowed from the server itself; in a container the browser arrives through the Docker
+      # network, so allow it for the one-time setup and remove this line afterwards
+      FACTORYOS_Setup__AllowedNetworks: "172.16.0.0/12"
+    ports: ["5080:8080"]
+    depends_on: [sql]
+    restart: unless-stopped
+
+  worker:
+    build: { context: ../.., dockerfile: deploy/docker/Dockerfile.worker }
+    environment:
+      FACTORYOS_ConnectionStrings__FactoryOS: "Server=sql;Database=DivakarFactoryOS;User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=true"
+      FACTORYOS_Jwt__SigningKey: ${JWT_SIGNING_KEY}
+      FACTORYOS_Smtp__Host: ${SMTP_HOST:-}
+      FACTORYOS_Smtp__User: ${SMTP_USER:-}
+      FACTORYOS_Smtp__Password: ${SMTP_PASSWORD:-}
+      FACTORYOS_Smtp__From: ${SMTP_FROM:-alerts@example.com}
+    depends_on: [api]
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../../web
+      dockerfile: ../deploy/docker/Dockerfile.web
+      args: { NEXT_PUBLIC_API_URL: "${PUBLIC_API_URL}" }
+    ports: ["3000:3000"]
+    depends_on: [api]
+    restart: unless-stopped
+
+volumes:
+  sqldata:

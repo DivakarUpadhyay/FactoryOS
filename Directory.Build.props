@@ -1,0 +1,15 @@
+<Project>
+  <!-- Divakar FactoryOS: rules every project follows -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <Product>Divakar FactoryOS</Product>
+    <Company>Divakar</Company>
+    <Authors>Divakar Upadhyay</Authors>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+</Project>
