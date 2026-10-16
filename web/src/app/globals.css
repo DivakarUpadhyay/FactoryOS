@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+/* Divakar FactoryOS design tokens: light by default, dark follows the system or the toggle */
+:root {
+  --bg: #f4f6f9;
+  --panel: #ffffff;
+  --panel-2: #eef1f5;
+  --border: #dde2ea;
+  --text: #121826;
+  --muted: #5b6474;
+  --brand: #0f766e;
+  --brand-2: #14b8a6;
+  --ok: #16a34a;
+  --warn: #d97706;
+  --bad: #dc2626;
+  --info: #2563eb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b1017;
+    --panel: #111823;
+    --panel-2: #172131;
+    --border: #233044;
+    --text: #e6ebf2;
+    --muted: #8b97a8;
+    --brand: #14b8a6;
+    --brand-2: #2dd4bf;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0b1017;
+  --panel: #111823;
+  --panel-2: #172131;
+  --border: #233044;
+  --text: #e6ebf2;
+  --muted: #8b97a8;
+  --brand: #14b8a6;
+  --brand-2: #2dd4bf;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
+  --color-line: var(--border);
+  --color-ink: var(--text);
+  --color-muted: var(--muted);
+  --color-brand: var(--brand);
+  --color-brand-2: var(--brand-2);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
+  --color-info: var(--info);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+body {
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--brand) 30%, transparent);
+}
