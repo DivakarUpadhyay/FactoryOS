@@ -37,13 +37,13 @@ public interface IReportScheduleRepository
 public sealed class ReportService(ProductionService production, EnergyService energy, MaintenanceService maintenance, QualityService quality,
     AlarmService alarms, IReportScheduleRepository schedules, ICurrentUser me, IAuditLog audit)
 {
-    public static readonly string[] Types = ["production", "energy", "maintenance", "quality", "alarms"];
+    public static readonly string[] Types = ["production", "energy", "maintenance", "quality", "alarms", "transformation"];
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
     private static string N(double? v, int digits = 1) => v is { } x ? Math.Round(x, digits).ToString(Inv) : "";
     private static string P(double? v) => v is { } x ? $"{x.ToString("0.0", Inv)}%" : "—";
 
-    public async Task<Report> BuildAsync(string type, DateTime? from, DateTime? to, CancellationToken ct)
+    public async Task<Report> BuildAsync(string type, DateTime? from, DateTime? to, CancellationToken ct, DateTime? baseFrom = null, DateTime? baseTo = null)
     {
         var t = (to ?? DateTime.UtcNow).ToUniversalTime();
         var f = (from ?? t.AddDays(-1)).ToUniversalTime();
@@ -105,10 +105,122 @@ public sealed class ReportService(ProductionService production, EnergyService en
                         a.ClearedAt?.ToString("yyyy-MM-dd HH:mm", Inv) ?? ""])],
                     [.. list.GroupBy(a => a.AssetName).OrderByDescending(g => g.Count()).Take(5).Select(g => $"{g.Key}: {g.Count()} alarms")]);
             }
+            case "transformation":
+                return await TransformationAsync(f, t, baseFrom?.ToUniversalTime(), baseTo?.ToUniversalTime(), ct);
             default:
                 throw AppException.Validation($"Unknown report '{type}'. Choose one of: {string.Join(", ", Types)}.");
         }
     }
+
+    private sealed record PeriodKpis(OeeReport Oee, EnergySummary? Energy, (int Failures, double DowntimeMinutes, double? MttrMinutes, double? MtbfHours)? Reliability,
+        int Alarms, int CriticalAlarms);
+
+    private async Task<PeriodKpis> MeasureAsync(DateTime f, DateTime t, CancellationToken ct)
+    {
+        var oee = await production.OeeAsync(f, t, ct);
+        EnergySummary? e = null;
+        try
+        {
+            e = await energy.SummaryAsync(f, t, ct);
+        }
+        catch (AppException)
+        {
+            // the energy module is not in the plan
+        }
+        (int, double, double?, double?)? rel = null;
+        try
+        {
+            rel = await maintenance.PeriodReliabilityAsync(f, t, ct);
+        }
+        catch (AppException)
+        {
+            // the maintenance module is not in the plan
+        }
+        var list = await alarms.AlarmsAsync(null, f, t, null, ct);
+        return new PeriodKpis(oee, e, rel, list.Count, list.Count(a => a.Severity == "Critical"));
+    }
+
+    /// <summary>
+    /// Before / after evidence for a digital-transformation project: production, energy, carbon and maintenance KPIs
+    /// for a baseline period and the current period, measured the same way from machine counters and meters.
+    /// </summary>
+    private async Task<Report> TransformationAsync(DateTime f, DateTime t, DateTime? baseFrom, DateTime? baseTo, CancellationToken ct)
+    {
+        var (bf, bt) = baseFrom is { } x && baseTo is { } y ? (x, y) : TransformationMath.DefaultBaseline(f, t);
+        if (bt <= bf || t <= f)
+        {
+            throw AppException.Validation("Each period must end after it starts.");
+        }
+        if (bt > f)
+        {
+            throw AppException.Validation("The baseline must end before the current period starts.");
+        }
+        var b = await MeasureAsync(bf, bt, ct);
+        var c = await MeasureAsync(f, t, ct);
+        static double? PerHour(OeeReport o) => o.RunSec > 0 ? o.Good / (o.RunSec / 3600) : null;
+        static double? ScrapPct(OeeReport o) => o.Good + o.Scrap > 0 ? o.Scrap / (o.Good + o.Scrap) * 100 : null;
+        static double? PerPart(double? v, OeeReport o) => v is { } k && o.Good > 0 ? k / o.Good : null;
+        var rows = new List<KpiChange>
+        {
+            TransformationMath.Compare("Production", "OEE", "%", b.Oee.Plant.Value, c.Oee.Plant.Value, true),
+            TransformationMath.Compare("Production", "Availability", "%", b.Oee.Plant.Availability, c.Oee.Plant.Availability, true),
+            TransformationMath.Compare("Production", "Performance", "%", b.Oee.Plant.Performance, c.Oee.Plant.Performance, true),
+            TransformationMath.Compare("Production", "Quality (first pass)", "%", b.Oee.Plant.Quality, c.Oee.Plant.Quality, true),
+            TransformationMath.Compare("Production", "Good parts", "pcs", b.Oee.Good, c.Oee.Good, true, judge: false),
+            TransformationMath.Compare("Production", "Scrap rate", "%", ScrapPct(b.Oee), ScrapPct(c.Oee), false),
+            TransformationMath.Compare("Production", "Good parts per running hour", "pcs/h", PerHour(b.Oee), PerHour(c.Oee), true),
+        };
+        if (b.Energy is { } be && c.Energy is { } ce)
+        {
+            rows.AddRange([
+                TransformationMath.Compare("Energy", "Grid electricity", "kWh", be.GridKwh, ce.GridKwh, false, judge: false),
+                TransformationMath.Compare("Energy", "Electricity per good part", "kWh/pcs", PerPart(be.GridKwh, b.Oee), PerPart(ce.GridKwh, c.Oee), false),
+                TransformationMath.Compare("Energy", "Electricity cost", ce.Currency, (double)be.Cost, (double)ce.Cost, false, judge: false),
+                TransformationMath.Compare("Energy", "Peak demand", "kW", be.PeakKw, ce.PeakKw, false),
+                TransformationMath.Compare("Energy", "Idle energy (machines on, not producing)", "kWh", be.IdleKwh, ce.IdleKwh, false, judge: false),
+                TransformationMath.Compare("Energy", "Solar generation", "kWh", be.SolarKwh, ce.SolarKwh, true, judge: false),
+                TransformationMath.Compare("Carbon", "CO₂e from electricity", "kg", be.Co2Kg, ce.Co2Kg, false, judge: false),
+                TransformationMath.Compare("Carbon", "CO₂e per good part", "g/pcs", PerPart(be.Co2Kg * 1000, b.Oee), PerPart(ce.Co2Kg * 1000, c.Oee), false),
+            ]);
+        }
+        if (b.Reliability is { } br && c.Reliability is { } cr)
+        {
+            rows.AddRange([
+                TransformationMath.Compare("Maintenance", "Breakdowns (time in Fault)", "count", br.Failures, cr.Failures, false, judge: false),
+                TransformationMath.Compare("Maintenance", "Breakdown downtime", "min", br.DowntimeMinutes, cr.DowntimeMinutes, false, judge: false),
+                TransformationMath.Compare("Maintenance", "MTTR (mean time to repair)", "min", br.MttrMinutes, cr.MttrMinutes, false),
+                TransformationMath.Compare("Maintenance", "MTBF (mean running time between failures)", "h", br.MtbfHours, cr.MtbfHours, true),
+            ]);
+        }
+        rows.Add(TransformationMath.Compare("Alarms", "Alarms raised", "count", b.Alarms, c.Alarms, false, judge: false));
+        rows.Add(TransformationMath.Compare("Alarms", "Critical alarms", "count", b.CriticalAlarms, c.CriticalAlarms, false, judge: false));
+
+        var oeeRow = rows[0];
+        var figures = new List<Figure>
+        {
+            new("OEE", $"{TransformationMath.Format(oeeRow.Baseline, "%")} → {TransformationMath.Format(oeeRow.Current, "%")}"),
+            new("Better / worse KPIs", $"{rows.Count(r => r.Verdict == "better")} / {rows.Count(r => r.Verdict == "worse")}"),
+        };
+        foreach (var (kpi, label) in new[] { ("Electricity per good part", "kWh per good part"), ("CO₂e per good part", "CO₂e per good part"), ("MTTR (mean time to repair)", "MTTR") })
+        {
+            if (rows.FirstOrDefault(r => r.Kpi == kpi) is { } row)
+            {
+                figures.Add(new(label, TransformationMath.FormatChange(row)));
+            }
+        }
+        await audit.WriteAsync("report.transformation", "report", null, new { baseline = $"{bf:O}/{bt:O}", current = $"{f:O}/{t:O}" }, ct);
+        return new Report("transformation", "Digital transformation: baseline vs. current", f, t, figures,
+            ["Area", "KPI", "Unit", "Baseline", "Current", "Change", "Result"],
+            [.. rows.Select(r => (IReadOnlyList<string>)[r.Area, r.Kpi, r.Unit, TransformationMath.Format(r.Baseline, r.Unit), TransformationMath.Format(r.Current, r.Unit),
+                TransformationMath.FormatChange(r), r.Verdict])],
+            [
+                $"Baseline period: {bf:yyyy-MM-dd HH:mm} to {bt:yyyy-MM-dd HH:mm} UTC. Current period: {f:yyyy-MM-dd HH:mm} to {t:yyyy-MM-dd HH:mm} UTC.",
+                $"Measured on {c.Oee.Machines.Count} production machines. Parts come from machine counters (and shop-floor app entries), energy from meters, breakdowns from time in the Fault state.",
+                "OEE = availability × performance × quality. Percent KPIs change in points. Changes under 1 % (0.5 points) are shown as 'same'. Totals that depend on how long and how much the plant ran are shown as 'context'; rates and ratios carry the result.",
+                "CO₂e uses the electricity emission factor in Settings. For a subsidy or ESG filing, check that the KPI definitions match the program's own.",
+            ]);
+    }
+
 
     /// <summary>CSV with a header block of figures, then the table; UTF-8 with BOM so Excel shows Chinese and symbols correctly.</summary>
     public static byte[] ToCsv(Report r)

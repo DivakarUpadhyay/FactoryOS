@@ -228,6 +228,18 @@ public sealed class MaintenanceService(IMaintenanceRepository repo, IProductionR
         await repo.AssignAsync(tenantId, id, r.UserId, ct);
     }
 
+    /// <summary>Failures (time in Fault), MTTR and MTBF for any period, for before / after comparisons.</summary>
+    public async Task<(int Failures, double DowntimeMinutes, double? MttrMinutes, double? MtbfHours)> PeriodReliabilityAsync(DateTime from, DateTime to, CancellationToken ct)
+    {
+        await gate.EnsureAsync("maintenance", ct);
+        var tenantId = me.RequireTenant();
+        var failures = await repo.FailuresAsync(tenantId, from, to, ct);
+        var runHours = (await production.StateSecondsAsync(tenantId, from, to, ct)).Where(s => s.State == MachineStates.Running).Sum(s => s.Seconds) / 3600;
+        var n = failures.Sum(f => f.Failures);
+        var down = failures.Sum(f => f.DowntimeSeconds) / 60;
+        return (n, Math.Round(down, 1), n > 0 ? Math.Round(down / n, 1) : null, n > 0 ? Math.Round(runHours / n, 1) : null);
+    }
+
     /// <summary>Reliability over 30 days: failures are downtime in the Fault state; MTTR = mean fault duration, MTBF = running hours ÷ failures.</summary>
     public async Task<MaintenanceKpis> KpisAsync(CancellationToken ct)
     {

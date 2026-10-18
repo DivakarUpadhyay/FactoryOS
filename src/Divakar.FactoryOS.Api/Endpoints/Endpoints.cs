@@ -455,10 +455,10 @@ public static class Endpoints
             await s.DeleteScheduleAsync(id, ct);
             return Results.NoContent();
         }).RequirePermission(Permissions.SettingsManage);
-        reports.MapGet("/{type:regex(^(production|energy|maintenance|quality|alarms)$)}", async (string type, DateTime? from, DateTime? to, string? format,
-            ReportService s, CancellationToken ct) =>
+        reports.MapGet("/{type:regex(^(production|energy|maintenance|quality|alarms|transformation)$)}", async (string type, DateTime? from, DateTime? to, string? format,
+            DateTime? baseFrom, DateTime? baseTo, ReportService s, CancellationToken ct) =>
         {
-            var report = await s.BuildAsync(type, from, to, ct);
+            var report = await s.BuildAsync(type, from, to, ct, baseFrom, baseTo);
             return format == "csv"
                 ? Results.File(ReportService.ToCsv(report), "text/csv; charset=utf-8", $"factoryos-{type}-{report.From:yyyyMMdd}-{report.To:yyyyMMdd}.csv")
                 : Results.Ok(report);

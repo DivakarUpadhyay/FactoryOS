@@ -16,7 +16,10 @@ const types = [
   { key: "maintenance", label: "Maintenance" },
   { key: "quality", label: "Quality" },
   { key: "alarms", label: "Alarms" },
+  { key: "transformation", label: "Transformation (before / after)" },
 ];
+
+const verdictTone: Record<string, string> = { better: "text-ok font-medium", worse: "text-bad font-medium", same: "text-muted", context: "text-muted italic", "no data": "text-muted" };
 
 /** Every report on one page: pick a type and period, read it, print it (save as PDF) or download a CSV for Excel. */
 export default function ReportsPage() {
@@ -24,18 +27,21 @@ export default function ReportsPage() {
   const [type, setType] = useState("production");
   const [period, setPeriod] = useState("24h");
   const [report, setReport] = useState<Report | null>(null);
+  const [base, setBase] = useState({ from: "", to: "" });
+  // transformation: an optional baseline period (empty = the same length of time just before)
+  const baseQuery = type === "transformation" && base.from && base.to ? `&baseFrom=${new Date(base.from).toISOString()}&baseTo=${new Date(base.to).toISOString()}` : "";
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => {
     setBusy(true);
-    api<Report>(`/api/v1/reports/${type}?${periodQuery(period)}`).then((r) => { setReport(r); setError(null); }).catch((e) => setError(errorText(e))).finally(() => setBusy(false));
-  }, [type, period]);
+    api<Report>(`/api/v1/reports/${type}?${periodQuery(period)}${baseQuery}`).then((r) => { setReport(r); setError(null); }).catch((e) => setError(errorText(e))).finally(() => setBusy(false));
+  }, [type, period, baseQuery]);
   useEffect(load, [load]);
 
   async function downloadCsv() {
     // fetch with the access token (a plain link cannot send it), then save the file
-    const res = await fetch(`${API_URL}/api/v1/reports/${type}?${periodQuery(period)}&format=csv`, { headers: { Authorization: `Bearer ${await hubToken()}` } });
+    const res = await fetch(`${API_URL}/api/v1/reports/${type}?${periodQuery(period)}${baseQuery}&format=csv`, { headers: { Authorization: `Bearer ${await hubToken()}` } });
     if (!res.ok) return setError(`Download failed (${res.status})`);
     const blob = await res.blob();
     const name = /filename="?([^";]+)/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? `${type}.csv`;
@@ -57,6 +63,16 @@ export default function ReportsPage() {
           </div>
         } />
       <ErrorNote error={error} />
+      {type === "transformation" && (
+        <Card className="mb-4 print:hidden" title="Baseline period">
+          <p className="mb-3 text-sm text-muted">Compare the period above with a baseline, for example the month before a project started. Leave empty to use the same length of time just before. Print or download it as evidence for a digital-transformation subsidy or an ESG report.</p>
+          <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+            <Field label="Baseline from"><Input type="datetime-local" value={base.from} onChange={(e) => setBase({ ...base, from: e.target.value })} /></Field>
+            <Field label="Baseline to"><Input type="datetime-local" value={base.to} onChange={(e) => setBase({ ...base, to: e.target.value })} /></Field>
+            <Button variant="ghost" onClick={() => setBase({ from: "", to: "" })}>Use period before</Button>
+          </div>
+        </Card>
+      )}
       {report && (
         <div className={cx(busy && "opacity-60")}>
           <Card title={`${report.title} · ${new Date(report.from + (report.from.endsWith("Z") ? "" : "Z")).toLocaleString()} – ${new Date(report.to + (report.to.endsWith("Z") ? "" : "Z")).toLocaleString()}`} className="mb-4">
@@ -67,7 +83,7 @@ export default function ReportsPage() {
           </Card>
           <Card>
             <Table head={report.columns} empty={report.rows.length === 0}>
-              {report.rows.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j} className={cx("px-3 py-2 text-sm", j > 0 && /^-?[\d.,]+%?$/.test(c) && "tabular-nums")}>{c || "—"}</td>)}</tr>)}
+              {report.rows.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j} className={cx("px-3 py-2 text-sm", j > 0 && /^[-+]?[\d.,]+%?( pts)?$/.test(c) && "tabular-nums", report.type === "transformation" && j === r.length - 1 && verdictTone[c])}>{c || "—"}</td>)}</tr>)}
             </Table>
           </Card>
         </div>
