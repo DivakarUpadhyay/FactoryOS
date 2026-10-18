@@ -17,8 +17,14 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [needsSetup, setNeedsSetup] = useState(false);
 
+  // ?next=/op sends a signed-in operator back to the shop-floor app
+  const next = () => {
+    const n = new URLSearchParams(window.location.search).get("next");
+    return n && n.startsWith("/") && !n.startsWith("//") ? n : null;
+  };
+
   useEffect(() => {
-    if (me) router.replace(me.isSuperAdmin ? "/platform" : "/app");
+    if (me) router.replace(me.isSuperAdmin ? "/platform" : next() ?? "/app");
   }, [me, router]);
 
   useEffect(() => {
@@ -31,7 +37,7 @@ export default function LoginPage() {
     setError(null);
     try {
       const user = await login(email, password);
-      router.replace(user.isSuperAdmin ? "/platform" : "/app");
+      router.replace(user.isSuperAdmin ? "/platform" : next() ?? "/app");
     } catch (err) {
       setError(errorText(err));
     } finally {

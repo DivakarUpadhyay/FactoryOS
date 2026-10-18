@@ -59,6 +59,7 @@ public static class DependencyInjection
         services.AddScoped<ILiveFeed, LiveFeedRepository>();
         services.AddScoped<IPowerSenseRepository, PowerSenseRepository>();
         services.AddScoped<IFixKnowledgeRepository, FixKnowledgeRepository>();
+        services.AddScoped<IOperatorRepository, OperatorRepository>();
         services.AddScoped<IFloorRepository, FloorRepository>();
         services.AddScoped<IEnergyRepository, EnergyRepository>();
         services.AddScoped<ILoadShedRepository, LoadShedRepository>();

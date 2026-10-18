@@ -12,6 +12,9 @@ type Record = { inspectionId: string; planName: string; workOrderCode: string | 
 type Product = { productId: string; name: string };
 type Char = { charId: string; name: string; unit: string };
 
+export type InspPlan = Plan;
+export type InspDue = Due;
+
 const when = { FirstPiece: "First piece", EveryN: "Every N parts", Final: "Final" } as const;
 
 /** Inspections: what is due now, recording an inspection, the plans, and the history. */
@@ -93,7 +96,7 @@ export function InspectionsTab({ canInspect, canManage }: { canInspect: boolean;
   );
 }
 
-function Perform({ plan, due, onDone }: { plan: Plan; due?: Due; onDone: (msg: string) => void }) {
+export function Perform({ plan, due, onDone }: { plan: Plan; due?: Due; onDone: (msg: string) => void }) {
   const [values, setValues] = useState<{ [seq: number]: string }>({});
   const [pass, setPass] = useState<{ [seq: number]: boolean | undefined }>({});
   const [lot, setLot] = useState(due?.lotNo ?? "");

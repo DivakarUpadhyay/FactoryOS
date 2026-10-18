@@ -213,6 +213,10 @@ public static class Endpoints
         g.MapGet("/oee", (DateTime? from, DateTime? to, ProductionService s, CancellationToken ct) => s.OeeAsync(from, to, ct))
             .RequirePermission(Permissions.ProductionRead);
         g.MapGet("/shifts", (DateOnly? date, ProductionService s, CancellationToken ct) => s.ShiftsAsync(date, ct)).RequirePermission(Permissions.ProductionRead);
+        g.MapGet("/operator", (OperatorService s, CancellationToken ct) => s.HomeAsync(ct)).RequirePermission(Permissions.ProductionRead);
+        g.MapGet("/operator/entries", (Guid? assetId, OperatorService s, CancellationToken ct) => s.EntriesAsync(assetId, ct)).RequirePermission(Permissions.ProductionRead);
+        g.MapPost("/operator/counts", async (CountRequest r, OperatorService s, CancellationToken ct) =>
+            Results.Created("/api/v1/production/operator/entries", new { entryId = await s.CountAsync(r, ct) })).RequirePermission(Permissions.ProductionOperate);
         g.MapGet("/reasons", (ProductionService s, CancellationToken ct) => s.ReasonsAsync(ct)).RequirePermission(Permissions.ProductionRead);
         g.MapGet("/downtimes", (DateTime? from, DateTime? to, Guid? assetId, bool? pending, ProductionService s, CancellationToken ct) =>
             s.DowntimesAsync(from, to, assetId, pending ?? false, ct)).RequirePermission(Permissions.ProductionRead);
