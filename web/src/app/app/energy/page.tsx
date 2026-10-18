@@ -5,7 +5,9 @@ import Link from "next/link";
 import { Coins, Gauge, Lightbulb, Sun, Zap } from "lucide-react";
 import { api } from "@/lib/api";
 import { BarChart, HBars, PERIODS, fmt, periodQuery } from "@/components/charts";
-import { Card, ErrorNote, PageHeader, Select, Stat, Table, errorText } from "@/components/ui";
+import { Card, ErrorNote, PageHeader, Select, Stat, Table, cx, errorText } from "@/components/ui";
+import { BillForecastTab, EnergyShiftsTab, LoadShedTab } from "@/components/energy-extras";
+import { useAuth } from "@/lib/auth";
 
 type AssetEnergy = { assetId: string; code: string; name: string; assetTypeCode: string; category: string; kwh: number; cost: number; sharePct: number; parts: number | null; kwhPerPart: number | null };
 type Summary = {
@@ -16,6 +18,15 @@ type Summary = {
 };
 
 export default function EnergyPage() {
+  const { can } = useAuth();
+  const [tab, setTab] = useState<"overview" | "forecast" | "shifts" | "shed">("overview");
+  const tabs = (
+    <div className="mb-4 flex gap-1 overflow-x-auto border-b border-line">
+      {([["overview", "Overview"], ["forecast", "Bill forecast"], ["shifts", "Cost per shift"], ["shed", "Load shedding"]] as const).map(([t, l]) => (
+        <button key={t} onClick={() => setTab(t)} className={cx("-mb-px whitespace-nowrap border-b-2 px-4 py-2 text-sm", tab === t ? "border-brand font-medium text-brand" : "border-transparent text-muted hover:text-ink")}>{l}</button>
+      ))}
+    </div>
+  );
   const [period, setPeriod] = useState("24h");
   const [s, setS] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +58,11 @@ export default function EnergyPage() {
           </Select>
         } />
       <ErrorNote error={error} />
-      {s && (
+      {tabs}
+      {tab === "forecast" && <BillForecastTab />}
+      {tab === "shifts" && <EnergyShiftsTab />}
+      {tab === "shed" && <LoadShedTab canManage={can("energy.manage")} />}
+      {tab === "overview" && s && (
         <>
           <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Stat label="Grid energy" value={`${fmt(s.gridKwh)} kWh`} sub={s.solarKwh ? `+ ${fmt(s.solarKwh)} kWh solar` : `${fmt(s.co2Kg)} kg CO₂e`} icon={<Zap size={16} />} />

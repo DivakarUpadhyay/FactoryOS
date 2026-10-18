@@ -89,10 +89,11 @@ public sealed class EnergyPlanningTests(FactoryOsApp app)
         var ev = (await Get(admin, "/api/v1/energy/load-shed/events")).EnumerateArray().Single();
         Assert.Contains("Wrote 0 to run", ev.GetProperty("result").GetString());
 
-        await device.PostAsJsonAsync("/api/v1/ingest", new { readings = new[] { new { tag = "demand", value = 250.0 } } });
-        await Run(DateTime.UtcNow);                       // too soon: stays off
+        var later = DateTime.UtcNow.AddMinutes(2.5);
+        await device.PostAsJsonAsync("/api/v1/ingest", new { readings = new[] { new { tag = "demand", value = 250.0, ts = later.AddSeconds(-5) } } });
+        await Run(DateTime.UtcNow);                       // too soon after shedding: stays off
         Assert.Equal(0, server.GetCoils(1)[0] & 1);
-        await Run(DateTime.UtcNow.AddMinutes(2.5));       // stale-check uses the reading time, which is now
+        await Run(later);                                 // 2.5 minutes later, with a fresh low reading
         Assert.Equal(1, server.GetCoils(1)[0] & 1);       // back on
         ev = (await Get(admin, "/api/v1/energy/load-shed/events")).EnumerateArray().Single();
         Assert.Equal(JsonValueKind.String, ev.GetProperty("restoredAt").ValueKind);

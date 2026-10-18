@@ -9,7 +9,7 @@ import { Button, Card, ErrorNote, Field, Input, PageHeader, Select, errorText } 
 type Shift = { name: string; start: string; end: string; breakMinutes: number };
 type Settings = {
   timeZone: string; currency: string; peakRate: number; offPeakRate: number; peakStartHour: number; peakEndHour: number; contractKw: number | null;
-  electricityFactor: number; gasFactor: number; mainMeterAssetId: string | null; shifts: Shift[]; alertEmails: string | null; alertWebhookUrl: string | null;
+  electricityFactor: number; gasFactor: number; mainMeterAssetId: string | null; shifts: Shift[]; alertEmails: string | null; alertWebhookUrl: string | null; demandChargePerKw: number | null;
 };
 type Meter = { assetId: string; name: string; assetTypeCode: string };
 
@@ -65,6 +65,7 @@ export default function SettingsPage() {
               <Field label="Peak rate" hint={`${s.currency} per kWh`}><Input type="number" step="0.01" min="0" value={s.peakRate} onChange={num("peakRate")} required /></Field>
               <Field label="Off-peak rate" hint={`${s.currency} per kWh`}><Input type="number" step="0.01" min="0" value={s.offPeakRate} onChange={num("offPeakRate")} required /></Field>
               <Field label="Contract capacity" hint="kW; peak-demand alerts compare against it"><Input type="number" step="1" min="0" value={s.contractKw ?? ""} onChange={num("contractKw")} /></Field>
+              <Field label="Basic charge per contract kW" hint={`${s.currency} per kW per month; used by the bill forecast`}><Input type="number" step="0.01" min="0" value={s.demandChargePerKw ?? ""} onChange={num("demandChargePerKw")} /></Field>
               <Field label="Peak starts (hour)" hint="Weekdays; weekends are off-peak"><Input type="number" min="0" max="23" value={s.peakStartHour} onChange={num("peakStartHour")} required /></Field>
               <Field label="Peak ends (hour)"><Input type="number" min="1" max="24" value={s.peakEndHour} onChange={num("peakEndHour")} required /></Field>
               <Field label="Main meter" hint="Leave on automatic to use plant-level meters">
