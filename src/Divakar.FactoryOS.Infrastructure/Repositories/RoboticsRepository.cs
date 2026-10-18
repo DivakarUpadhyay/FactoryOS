@@ -111,7 +111,7 @@ public sealed class RoboticsRepository(Db db) : IRoboticsRepository
     }
 }
 
-public sealed class FleetStore(Db db) : IFleetStore
+public sealed class FleetStore(Db db, Security.SecretProtector secrets) : IFleetStore
 {
     public async Task<IReadOnlyList<OpenMission>> OpenMissionsAsync(CancellationToken ct)
     {
@@ -130,7 +130,7 @@ public sealed class FleetStore(Db db) : IFleetStore
     public async Task<IReadOnlyList<VehicleState>> VehiclesAsync(CancellationToken ct)
     {
         await using var con = await db.OpenSystemAsync(ct);
-        return [.. await con.QueryAsync<VehicleState>(new CommandDefinition("""
+        return [.. (await con.QueryAsync<VehicleState>(new CommandDefinition("""
             SELECT a.TenantId, a.AssetId, a.Name, a.Vendor, a.SerialNo, a.ProtocolCode, a.Endpoint, a.ConnectorSettings AS Settings, a.Status,
                    (SELECT TOP 1 l.Value FROM plant.Tags g JOIN telemetry.Latest l ON l.TagId = g.TagId WHERE g.AssetId = a.AssetId AND g.SensorTypeCode = 'battery_soc') AS Battery,
                    (SELECT TOP 1 l.Value FROM plant.Tags g JOIN telemetry.Latest l ON l.TagId = g.TagId WHERE g.AssetId = a.AssetId AND g.SensorTypeCode = 'position_x') AS X,
@@ -139,7 +139,7 @@ public sealed class FleetStore(Db db) : IFleetStore
                              THEN 1 ELSE 0 END AS bit) AS Busy
             FROM plant.Assets a
             WHERE a.IsActive = 1 AND a.AssetTypeCode IN ('agv', 'amr')
-            """, cancellationToken: ct))];
+            """, cancellationToken: ct))).Select(v => v with { Settings = secrets.Unprotect(v.Settings) })];
     }
 
     public async Task AssignAsync(Guid missionId, Guid vehicleId, string orderId, CancellationToken ct)

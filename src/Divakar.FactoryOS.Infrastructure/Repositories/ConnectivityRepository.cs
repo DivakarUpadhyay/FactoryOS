@@ -3,6 +3,7 @@ using Dapper;
 using Divakar.FactoryOS.Application.Connectivity;
 using Divakar.FactoryOS.Domain.Plant;
 using Divakar.FactoryOS.Infrastructure.Database;
+using Divakar.FactoryOS.Infrastructure.Security;
 
 namespace Divakar.FactoryOS.Infrastructure.Repositories;
 
@@ -21,13 +22,14 @@ internal static class BindingSql
         string? Settings, int PollMs, decimal? RatedPowerKw, Guid TagId, string Code, string SensorTypeCode, string Profile, string? Address,
         double Scale, double Offset, double Deadband, double? MinValue, double? MaxValue);
 
-    public static async Task<List<AssetBinding>> ReadAsync(IDbConnection con, string sql, object args, CancellationToken ct)
+    /// <summary>Reads bindings; connection secrets are decrypted here, just before a connector uses them.</summary>
+    public static async Task<List<AssetBinding>> ReadAsync(IDbConnection con, string sql, object args, SecretProtector secrets, CancellationToken ct)
     {
         var rows = await con.QueryAsync<Row>(new CommandDefinition(sql, args, cancellationToken: ct));
         return [.. rows.GroupBy(r => r.AssetId).Select(g =>
         {
             var a = g.First();
-            return new AssetBinding(a.TenantId, a.AssetId, a.AssetCode, a.AssetTypeCode, a.ProtocolCode, a.Endpoint, a.Settings, a.PollMs,
+            return new AssetBinding(a.TenantId, a.AssetId, a.AssetCode, a.AssetTypeCode, a.ProtocolCode, a.Endpoint, secrets.Unprotect(a.Settings), a.PollMs,
                 a.RatedPowerKw, [.. g.OrderBy(r => r.Code).Select(r => new TagBinding(r.TagId, r.Code, r.SensorTypeCode, r.Profile, r.Address,
                     r.Scale, r.Offset, r.Deadband, r.MinValue, r.MaxValue))]);
         })];
@@ -35,7 +37,7 @@ internal static class BindingSql
 }
 
 /// <summary>Used by the ingestion worker and HTTP push: works across all tenants with the system connection.</summary>
-public sealed class IngestionStore(Db db) : IIngestionStore
+public sealed class IngestionStore(Db db, SecretProtector secrets) : IIngestionStore
 {
     public async Task<IReadOnlyList<AssetBinding>> ActiveBindingsAsync(IReadOnlyCollection<string> protocols, CancellationToken ct)
     {
@@ -43,7 +45,7 @@ public sealed class IngestionStore(Db db) : IIngestionStore
         return await BindingSql.ReadAsync(con, BindingSql.Select + """
              JOIN core.Tenants tn ON tn.TenantId = a.TenantId
             WHERE a.IsActive = 1 AND a.ProtocolCode IN @protocols AND tn.Status IN ('Trial','Active')
-            """, new { protocols }, ct);
+            """, new { protocols }, secrets, ct);
     }
 
     public async Task WriteAsync(IReadOnlyList<ReadingRow> rows, CancellationToken ct)
@@ -92,7 +94,7 @@ public sealed class IngestionStore(Db db) : IIngestionStore
     }
 }
 
-public sealed class ConnectivityRepository(Db db) : IConnectivityRepository
+public sealed class ConnectivityRepository(Db db, SecretProtector secrets) : IConnectivityRepository
 {
     private const string TagSelect = """
         SELECT TagId, AssetId, Code, Name, SensorTypeCode, Unit, Address, Scale, Offset, Deadband, MinValue, MaxValue, IsActive
@@ -160,6 +162,7 @@ public sealed class ConnectivityRepository(Db db) : IConnectivityRepository
 
     public async Task SaveConnectionAsync(Guid tenantId, Guid assetId, int pollMs, string? settings, CancellationToken ct)
     {
+        settings = secrets.Protect(settings);   // secrets are stored encrypted
         await using var con = await db.OpenAsync(ct);
         await con.ExecuteAsync(new CommandDefinition(
             "UPDATE plant.Assets SET PollMs = @pollMs, ConnectorSettings = @settings WHERE AssetId = @assetId AND TenantId = @tenantId",
@@ -224,7 +227,7 @@ public sealed class ConnectivityRepository(Db db) : IConnectivityRepository
     {
         await using var con = await db.OpenAsync(ct);
         var list = await BindingSql.ReadAsync(con, BindingSql.Select + " WHERE a.TenantId = @tenantId AND a.AssetId = @assetId AND a.ProtocolCode IS NOT NULL",
-            new { tenantId, assetId }, ct);
+            new { tenantId, assetId }, secrets, ct);
         return list.FirstOrDefault();
     }
 

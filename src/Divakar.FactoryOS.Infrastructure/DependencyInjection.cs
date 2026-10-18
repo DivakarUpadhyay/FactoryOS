@@ -43,6 +43,7 @@ public static class DependencyInjection
         var jwt = config.GetSection("Jwt").Get<JwtOptions>() ?? new JwtOptions();
         services.AddSingleton(db);
         services.AddSingleton(jwt);
+        services.AddSingleton(SecretProtector.FromConfiguration(config));
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
         services.AddSingleton<ITokenService, JwtTokenService>();

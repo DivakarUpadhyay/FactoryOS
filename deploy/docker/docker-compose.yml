@@ -18,6 +18,7 @@ services:
     environment:
       FACTORYOS_ConnectionStrings__FactoryOS: "Server=sql;Database=DivakarFactoryOS;User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=true"
       FACTORYOS_Jwt__SigningKey: ${JWT_SIGNING_KEY}
+      FACTORYOS_Secrets__Key: ${SECRETS_KEY}
       FACTORYOS_Cors__Origins__0: ${WEB_ORIGIN}
       FACTORYOS_Ai__AnthropicApiKey: ${ANTHROPIC_API_KEY:-}
       FACTORYOS_Smtp__Host: ${SMTP_HOST:-}
@@ -36,6 +37,7 @@ services:
     environment:
       FACTORYOS_ConnectionStrings__FactoryOS: "Server=sql;Database=DivakarFactoryOS;User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=true"
       FACTORYOS_Jwt__SigningKey: ${JWT_SIGNING_KEY}
+      FACTORYOS_Secrets__Key: ${SECRETS_KEY}
       FACTORYOS_Smtp__Host: ${SMTP_HOST:-}
       FACTORYOS_Smtp__User: ${SMTP_USER:-}
       FACTORYOS_Smtp__Password: ${SMTP_PASSWORD:-}

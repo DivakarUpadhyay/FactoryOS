@@ -267,7 +267,15 @@ public sealed class ConnectivityTests(FactoryOsApp app)
         cmd.CommandText = "EXEC sp_set_session_context N'TenantId', @t; SELECT ConnectorSettings FROM plant.Assets WHERE AssetId = @a";
         cmd.Parameters.AddWithValue("@t", tenantId);
         cmd.Parameters.AddWithValue("@a", asset);
-        Assert.Contains("Top-Secret-1", (string)(await cmd.ExecuteScalarAsync())!);
+        var stored = (string)(await cmd.ExecuteScalarAsync())!;
+        Assert.DoesNotContain("Top-Secret-1", stored);   // encrypted at rest
+        Assert.Contains("enc:v1:", stored);
+        await admin.PostAsJsonAsync($"/api/v1/plant/assets/{asset}/tags", new { code = "t", name = "Temp", sensorTypeCode = "temperature", address = "ns=2;s=T" });
+        using (var scope = app.Services.CreateScope())   // and decrypted for the connector
+        {
+            var binding = (await scope.ServiceProvider.GetRequiredService<IIngestionStore>().ActiveBindingsAsync(["opcua"], default)).Single(b => b.AssetId == asset);
+            Assert.Contains("Top-Secret-1", binding.Settings);
+        }
 
         var bad = await admin.PutAsJsonAsync($"/api/v1/plant/assets/{asset}/connection", new { pollMs = 10 });
         Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);

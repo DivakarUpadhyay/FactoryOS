@@ -91,6 +91,12 @@ var app = builder.Build();
 if (app.Configuration.GetValue("Database:MigrateOnStartup", true))
 {
     Migrator.Run(app.Services.GetRequiredService<DbOptions>().ConnectionString);
+    // earlier versions stored device passwords in plain text: encrypt them once
+    var encrypted = app.Services.GetRequiredService<SecretProtector>().EncryptStoredSecrets(app.Services.GetRequiredService<DbOptions>().ConnectionString);
+    if (encrypted > 0)
+    {
+        app.Logger.LogInformation("Encrypted the connection secrets of {Count} assets", encrypted);
+    }
 }
 
 app.UseForwardedHeaders();
