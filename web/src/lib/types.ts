@@ -155,7 +155,7 @@ export const ADDRESS_HELP: Record<string, string> = {
 };
 
 export const SETTINGS_HELP: Record<string, string> = {
-  opcua: '{"username": "…", "password": "…", "acceptUntrusted": false}',
+  opcua: '{"securityMode": "SignAndEncrypt", "securityPolicy": "Basic256Sha256", "username": "…", "password": "…", "acceptUntrusted": false}  · securityMode: None | Sign | SignAndEncrypt | Best',
   "modbus-tcp": '{"unitId": 1}',
   mqtt: '{"username": "…", "password": "…", "tls": false, "clientId": "…"}',
   s7: '{"cpu": "S71500", "rack": 0, "slot": 1}',
