@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { LineSettings } from "@/components/line-settings";
 import { Button, Card, ErrorNote, Field, Input, PageHeader, Select, errorText } from "@/components/ui";
 
 type Shift = { name: string; start: string; end: string; breakMinutes: number };
@@ -100,7 +101,7 @@ export default function SettingsPage() {
               <Input value={s.alertEmails ?? ""} onChange={(e) => set("alertEmails", e.target.value || null)} placeholder="plant.manager@company.com, maintenance@company.com" />
             </Field>
             <div className="mt-4">
-              <Field label="Webhook" hint="Every alarm is posted here as JSON — connect LINE, Teams, Slack or your own system">
+              <Field label="Webhook" hint="Every alarm is posted here as JSON — connect Teams, Slack or your own system">
                 <Input type="url" value={s.alertWebhookUrl ?? ""} onChange={(e) => set("alertWebhookUrl", e.target.value || null)} placeholder="https://example.com/hooks/factory-alarms" />
               </Field>
             </div>
@@ -108,6 +109,7 @@ export default function SettingsPage() {
         </fieldset>
         {edit && <Button type="submit" disabled={busy}>{busy ? "Saving…" : "Save settings"}</Button>}
       </form>
+      {edit && <div className="mt-6"><LineSettings /></div>}
     </>
   );
 }

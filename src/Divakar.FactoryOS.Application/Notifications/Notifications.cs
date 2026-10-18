@@ -25,8 +25,8 @@ public interface INotificationTransport
     Task<bool> SendAsync(PendingNotification n, CancellationToken ct);
 }
 
-/// <summary>Queues alarm messages to the company's alarm e-mail addresses and webhook (from Settings).</summary>
-public sealed class AlarmNotifier(INotificationRepository repo, ISettingsRepository settings) : IAlarmNotifier
+/// <summary>Queues alarm messages to the company's alarm e-mail addresses, webhook (from Settings) and LINE recipients.</summary>
+public sealed class AlarmNotifier(INotificationRepository repo, ISettingsRepository settings, ILineRepository line) : IAlarmNotifier
 {
     public async Task NotifyAsync(Guid tenantId, string subject, string body, object payload, CancellationToken ct)
     {
@@ -39,6 +39,13 @@ public sealed class AlarmNotifier(INotificationRepository repo, ISettingsReposit
         {
             await repo.EnqueueAsync(tenantId, "Webhook", s.AlertWebhookUrl, subject,
                 JsonSerializer.Serialize(new { subject, text = body, data = payload, source = "Divakar FactoryOS" }), ct);
+        }
+        if (await line.GetSystemAsync(tenantId, ct) is { Enabled: true } l)
+        {
+            foreach (var to in l.Recipients)
+            {
+                await repo.EnqueueAsync(tenantId, "Line", to, subject, body, ct);
+            }
         }
     }
 }
@@ -56,7 +63,12 @@ public sealed class NotificationSender(INotificationRepository repo, IEnumerable
             {
                 if (t is null || !await t.SendAsync(n, ct))
                 {
-                    await repo.MarkAsync(n.NotificationId, "Skipped", n.Channel == "Email" ? "E-mail (SMTP) is not configured on the server" : "Channel not configured", ct);
+                    await repo.MarkAsync(n.NotificationId, "Skipped", n.Channel switch
+                    {
+                        "Email" => "E-mail (SMTP) is not configured on the server",
+                        "Line" => "LINE is not set up or is turned off for this company",
+                        _ => "Channel not configured",
+                    }, ct);
                     continue;
                 }
                 await repo.MarkAsync(n.NotificationId, "Sent", null, ct);

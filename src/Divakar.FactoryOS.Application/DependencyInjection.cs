@@ -56,6 +56,7 @@ public static class DependencyInjection
         services.AddScoped<IAlarmNotifier, AlarmNotifier>();
         services.AddScoped<NotificationSender>();
         services.AddScoped<NotificationService>();
+        services.AddScoped<LineService>();
         services.AddScoped<QualityService>();
         services.AddScoped<InspectionService>();
         services.AddScoped<SpcSampler>();

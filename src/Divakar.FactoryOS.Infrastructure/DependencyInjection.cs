@@ -87,6 +87,9 @@ public static class DependencyInjection
         services.AddSingleton(config.GetSection("Smtp").Get<SmtpOptions>() ?? new SmtpOptions());
         services.AddScoped<INotificationTransport, SmtpTransport>();
         services.AddScoped<INotificationTransport>(_ => new WebhookTransport(Webhooks));
+        services.AddSingleton(config.GetSection("Line").Get<LineOptions>() ?? new LineOptions());
+        services.AddScoped<ILineRepository, LineRepository>();
+        services.AddScoped<INotificationTransport>(sp => new LineTransport(Webhooks, sp.GetRequiredService<ILineRepository>(), sp.GetRequiredService<LineOptions>()));
         return services;
     }
 }

@@ -33,6 +33,7 @@ public sealed class FactoryOsApp : WebApplicationFactory<Program>
         builder.UseSetting("ConnectionStrings:FactoryOS", ConnectionString);
         builder.UseSetting("Jwt:SigningKey", "test-signing-key-for-integration-tests-only-0123456789");
         builder.UseSetting("Secrets:Key", Convert.ToBase64String(Enumerable.Range(1, 32).Select(i => (byte)i).ToArray()));
+        builder.UseSetting("Line:ApiBase", LineStub.Instance.Url);
         builder.UseSetting("RateLimit:AuthPerMinute", "1000");
         builder.UseSetting("RateLimit:RefreshPerMinute", "1000");
         // The test server has no client address; present calls as coming from this machine (setup needs that).

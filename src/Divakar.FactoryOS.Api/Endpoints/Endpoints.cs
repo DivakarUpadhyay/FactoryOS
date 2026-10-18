@@ -496,6 +496,27 @@ public static class Endpoints
             return Results.NoContent();
         }).RequirePermission(Permissions.SettingsManage);
 
+        var line = api.MapGroup("/integrations/line").WithTags("Integrations");
+        line.MapGet("/", (HttpContext http, LineService s, CancellationToken ct) => s.GetAsync($"{http.Request.Scheme}://{http.Request.Host}", ct))
+            .RequirePermission(Permissions.SettingsManage);
+        line.MapPut("/", async (SaveLineRequest r, LineService s, CancellationToken ct) =>
+        {
+            await s.SaveAsync(r, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.SettingsManage);
+        line.MapPost("/test", async (LineService s, CancellationToken ct) => Results.Ok(new { queued = await s.TestAsync(ct) })).RequirePermission(Permissions.SettingsManage);
+        // called by LINE's servers: no sign-in, the body is authenticated by its HMAC signature instead
+        line.MapPost("/webhook/{tenantId:guid}", async (Guid tenantId, HttpRequest req, LineService s, CancellationToken ct) =>
+        {
+            using var buffer = new MemoryStream();
+            await req.Body.CopyToAsync(buffer, ct);
+            if (buffer.Length > 256 * 1024)
+            {
+                return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
+            }
+            return await s.WebhookAsync(tenantId, buffer.ToArray(), req.Headers["X-Line-Signature"].FirstOrDefault(), ct) ? Results.Ok() : Results.Unauthorized();
+        }).AllowAnonymous();
+
         var assistant = api.MapGroup("/assistant").WithTags("Assistant");
         assistant.MapGet("/status", (AssistantService s) => s.Status()).RequirePermission(Permissions.PlantRead);
         assistant.MapPost("/ask", (AskRequest r, AssistantService s, CancellationToken ct) => s.AskAsync(r, ct)).RequirePermission(Permissions.PlantRead);
