@@ -12,14 +12,15 @@ internal static class BindingSql
     public const string Select = """
         SELECT a.TenantId, a.AssetId, a.Code AS AssetCode, a.AssetTypeCode, a.ProtocolCode, a.Endpoint, a.ConnectorSettings AS Settings,
                a.PollMs, a.RatedPowerKw,
+               CAST(CASE WHEN EXISTS (SELECT 1 FROM plant.PowerProfiles pp WHERE pp.AssetId = a.AssetId) THEN 1 ELSE 0 END AS bit) AS DerivedState,
                t.TagId, t.Code, t.SensorTypeCode, s.SimProfile AS Profile, t.Address, t.Scale, t.Offset, t.Deadband, t.MinValue, t.MaxValue
         FROM plant.Assets a
-        JOIN plant.Tags t ON t.AssetId = a.AssetId AND t.IsActive = 1
+        JOIN plant.Tags t ON t.AssetId = a.AssetId AND t.IsActive = 1 AND (t.Address IS NULL OR t.Address NOT LIKE 'virtual:%')
         JOIN plant.SensorTypes s ON s.SensorTypeCode = t.SensorTypeCode
         """;
 
     private sealed record Row(Guid TenantId, Guid AssetId, string AssetCode, string AssetTypeCode, string ProtocolCode, string? Endpoint,
-        string? Settings, int PollMs, decimal? RatedPowerKw, Guid TagId, string Code, string SensorTypeCode, string Profile, string? Address,
+        string? Settings, int PollMs, decimal? RatedPowerKw, bool DerivedState, Guid TagId, string Code, string SensorTypeCode, string Profile, string? Address,
         double Scale, double Offset, double Deadband, double? MinValue, double? MaxValue);
 
     /// <summary>Reads bindings; connection secrets are decrypted here, just before a connector uses them.</summary>
@@ -31,7 +32,7 @@ internal static class BindingSql
             var a = g.First();
             return new AssetBinding(a.TenantId, a.AssetId, a.AssetCode, a.AssetTypeCode, a.ProtocolCode, a.Endpoint, secrets.Unprotect(a.Settings), a.PollMs,
                 a.RatedPowerKw, [.. g.OrderBy(r => r.Code).Select(r => new TagBinding(r.TagId, r.Code, r.SensorTypeCode, r.Profile, r.Address,
-                    r.Scale, r.Offset, r.Deadband, r.MinValue, r.MaxValue))]);
+                    r.Scale, r.Offset, r.Deadband, r.MinValue, r.MaxValue))], a.DerivedState);
         })];
     }
 }

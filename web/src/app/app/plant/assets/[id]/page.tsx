@@ -11,8 +11,9 @@ import {
 import { Badge, Button, Card, ErrorNote, Field, Input, LiveBadge, Modal, PageHeader, Select, Table, cx, errorText } from "@/components/ui";
 import { Sparkline } from "@/components/sparkline";
 import { useLive } from "@/lib/live";
+import { PowerSenseTab } from "@/components/power-sense";
 
-type Tab = "live" | "tags" | "connection";
+type Tab = "live" | "tags" | "power" | "connection";
 type TagForm = { tagId?: string; code: string; name: string; sensorTypeCode: string; unit: string; address: string; scale: string; offset: string; deadband: string; minValue: string; maxValue: string; isActive: boolean };
 
 const qualityTone = ["ok", "warn", "bad", "muted"] as const;
@@ -53,15 +54,16 @@ export default function AssetPage({ params }: { params: Promise<{ id: string }> 
       />
       <ErrorNote error={error} />
       <div className="mb-4 flex gap-1 border-b border-line">
-        {(["live", "tags", "connection"] as Tab[]).filter((t) => t !== "connection" || configure).map((t) => (
+        {(["live", "tags", "power", "connection"] as Tab[]).filter((t) => t !== "connection" || configure).map((t) => (
           <button key={t} onClick={() => setTab(t)}
             className={cx("-mb-px border-b-2 px-4 py-2 text-sm capitalize", tab === t ? "border-brand font-medium text-brand" : "border-transparent text-muted hover:text-ink")}>
-            {t === "live" ? "Live data" : t}
+            {t === "live" ? "Live data" : t === "power" ? "Power sense" : t}
           </button>
         ))}
       </div>
       {asset && tab === "live" && <LiveTab assetId={id} />}
       {asset && tab === "tags" && <TagsTab asset={asset} configure={configure} />}
+      {asset && tab === "power" && <PowerSenseTab assetId={id} canEdit={configure} />}
       {asset && tab === "connection" && <ConnectionTab asset={asset} protocolName={protocol?.name} supportLevel={protocol?.supportLevel} />}
     </>
   );

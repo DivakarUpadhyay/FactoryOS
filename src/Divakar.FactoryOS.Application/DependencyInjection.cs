@@ -33,6 +33,8 @@ public static class DependencyInjection
         services.AddScoped<AuditQuery>();
         services.AddScoped<ConnectivityService>();
         services.AddScoped<DemoFactoryService>();
+        services.AddScoped<PowerSenseService>();
+        services.AddScoped<PowerSenseJob>();
         services.AddScoped<FloorService>();
         services.AddScoped<SettingsService>();
         services.AddScoped<ModuleGate>();

@@ -171,6 +171,10 @@ public sealed class IngestionEngine(IIngestionStore store, ConnectorRegistry reg
 
     private static string StatusOf(AssetBinding b, List<ReadingRow> rows)
     {
+        if (b.DerivedState)
+        {
+            return "Unchanged";   // power sense sets this machine's state from its power readings
+        }
         var stateTag = b.Tags.FirstOrDefault(t => t.SensorTypeCode == "machine_state");
         if (stateTag is not null)
         {

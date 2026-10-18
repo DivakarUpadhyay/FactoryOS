@@ -8,7 +8,7 @@ public sealed record TagBinding(Guid TagId, string Code, string SensorTypeCode, 
 
 /// <summary>Everything a connector needs to talk to one asset.</summary>
 public sealed record AssetBinding(Guid TenantId, Guid AssetId, string AssetCode, string AssetTypeCode, string ProtocolCode,
-    string? Endpoint, string? Settings, int PollMs, decimal? RatedPowerKw, IReadOnlyList<TagBinding> Tags);
+    string? Endpoint, string? Settings, int PollMs, decimal? RatedPowerKw, IReadOnlyList<TagBinding> Tags, bool DerivedState = false);
 
 /// <summary>A raw value read from a device, before scaling. Null value with a bad quality means "could not read".</summary>
 public sealed record RawValue(Guid TagId, double? Value, byte Quality, DateTime Ts);

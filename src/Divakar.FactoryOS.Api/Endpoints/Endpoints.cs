@@ -515,6 +515,13 @@ public static class Endpoints
         a.MapPost("/test", (Guid assetId, ConnectivityService s, CancellationToken ct) => s.TestAsync(assetId, ct))
             .RequirePermission(Permissions.ConnectivityManage);
         a.MapGet("/live", (Guid assetId, ConnectivityService s, CancellationToken ct) => s.LiveAsync(assetId, ct)).RequirePermission(Permissions.PlantRead);
+        a.MapGet("/power-sense", (Guid assetId, PowerSenseService s, CancellationToken ct) => s.GetAsync(assetId, ct)).RequirePermission(Permissions.PlantRead);
+        a.MapPut("/power-sense", async (Guid assetId, SavePowerProfileRequest r, PowerSenseService s, CancellationToken ct) =>
+        {
+            await s.SaveAsync(assetId, r, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.ConnectivityManage);
+        a.MapPost("/power-sense/learn", (Guid assetId, PowerSenseService s, CancellationToken ct) => s.LearnAsync(assetId, ct)).RequirePermission(Permissions.ConnectivityManage);
         a.MapGet("/device-keys", (Guid assetId, ConnectivityService s, CancellationToken ct) => s.DeviceKeysAsync(assetId, ct))
             .RequirePermission(Permissions.ConnectivityManage);
         a.MapPost("/device-keys", (Guid assetId, ConnectivityService s, CancellationToken ct) => s.NewDeviceKeyAsync(assetId, ct))

@@ -15,6 +15,7 @@ public sealed class OperationsWorker(IServiceScopeFactory scopes, ILogger<Operat
 {
     private readonly List<(string Name, TimeSpan Every, Func<IServiceProvider, CancellationToken, Task> Run)> jobs =
     [
+        ("power sense", TimeSpan.FromSeconds(10), (sp, ct) => sp.GetRequiredService<Divakar.FactoryOS.Application.Connectivity.PowerSenseJob>().RunOnceAsync(DateTime.UtcNow, ct)),
         ("downtime detection", TimeSpan.FromSeconds(10), (sp, ct) => sp.GetRequiredService<IProductionJobsStore>().DetectDowntimeAsync(ct)),
         ("fleet dispatch", TimeSpan.FromSeconds(2), (sp, ct) => sp.GetRequiredService<FleetDispatcher>().RunOnceAsync(DateTime.UtcNow, ct)),
         ("alarm rules", TimeSpan.FromSeconds(5), (sp, ct) => sp.GetRequiredService<AlarmEngine>().RunOnceAsync(DateTime.UtcNow, ct)),

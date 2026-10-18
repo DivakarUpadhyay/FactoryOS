@@ -266,7 +266,9 @@ public sealed class ConnectivityService(
             throw AppException.Validation("Send between 1 and 1000 readings.");
         }
         var now = clock.UtcNow;
-        var tags = (await repo.DeviceTagsAsync(owner.TenantId, owner.AssetId, ct)).Where(t => t.IsActive).ToDictionary(t => t.Code);
+        var all = (await repo.DeviceTagsAsync(owner.TenantId, owner.AssetId, ct)).Where(t => t.IsActive).ToList();
+        var derived = all.Any(t => t.Address?.StartsWith(PowerSenseTags.Prefix, StringComparison.Ordinal) == true);   // state comes from power sense
+        var tags = all.Where(t => t.Address?.StartsWith(PowerSenseTags.Prefix, StringComparison.Ordinal) != true).ToDictionary(t => t.Code);
         var rows = new List<ReadingRow>();
         var unknown = new List<string>();
         foreach (var r in request.Readings)
@@ -287,7 +289,11 @@ public sealed class ConnectivityService(
         if (rows.Count > 0)
         {
             await ingest.WriteAsync(rows, ct);
-            await ingest.UpdateHealthAsync([new AssetHealth(owner.AssetId, "Running", now, null)], ct);
+            // a pushed machine state sets the status; power-sense machines get theirs from the power job; anything else is running
+            var stateTag = tags.Values.FirstOrDefault(t => t.SensorTypeCode == "machine_state");
+            var state = stateTag is null ? null : rows.Where(r => r.TagId == stateTag.TagId && r.Value is not null).MaxBy(r => r.Ts);
+            var status = state is not null ? MachineStates.ToStatus(state.Value) : derived ? "Unchanged" : "Running";
+            await ingest.UpdateHealthAsync([new AssetHealth(owner.AssetId, status, now, null)], ct);
         }
         return new PushResult(rows.Count, unknown.Distinct().ToList());
     }

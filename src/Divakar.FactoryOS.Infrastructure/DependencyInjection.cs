@@ -57,6 +57,7 @@ public static class DependencyInjection
         services.AddScoped<IConnectivityRepository, ConnectivityRepository>();
         services.AddScoped<IIngestionStore, IngestionStore>();
         services.AddScoped<ILiveFeed, LiveFeedRepository>();
+        services.AddScoped<IPowerSenseRepository, PowerSenseRepository>();
         services.AddScoped<IFloorRepository, FloorRepository>();
         services.AddScoped<IEnergyRepository, EnergyRepository>();
         services.AddScoped<ILoadShedRepository, LoadShedRepository>();
