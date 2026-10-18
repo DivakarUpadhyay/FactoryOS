@@ -34,6 +34,7 @@ public static class DependencyInjection
         services.AddScoped<ConnectivityService>();
         services.AddScoped<DemoFactoryService>();
         services.AddScoped<PowerSenseService>();
+        services.AddScoped<FixKnowledgeService>();
         services.AddScoped<PowerSenseJob>();
         services.AddScoped<FloorService>();
         services.AddScoped<SettingsService>();

@@ -333,6 +333,23 @@ public static class Endpoints
             await s.ChangeAsync(id, action, ct);
             return Results.NoContent();
         }).RequirePermission(Permissions.MaintenanceExecute);
+        g.MapGet("/work-orders/{id:guid}/suggestions", (Guid id, FixKnowledgeService s, CancellationToken ct) => s.ForWorkOrderAsync(id, ct))
+            .RequirePermission(Permissions.MaintenanceRead);
+        g.MapGet("/alarms/{alarmId:long}/suggestions", (long alarmId, FixKnowledgeService s, CancellationToken ct) => s.ForAlarmAsync(alarmId, ct))
+            .RequirePermission(Permissions.MaintenanceRead);
+        g.MapGet("/work-orders/{id:guid}/resolution", async (Guid id, FixKnowledgeService s, CancellationToken ct) =>
+            await s.GetAsync(id, ct) is { } r ? Results.Ok(r) : Results.NoContent()).RequirePermission(Permissions.MaintenanceRead);
+        g.MapPut("/work-orders/{id:guid}/resolution", async (Guid id, SaveResolutionRequest r, FixKnowledgeService s, CancellationToken ct) =>
+        {
+            await s.SaveAsync(id, r, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.MaintenanceExecute);
+        g.MapGet("/knowledge", (string? q, FixKnowledgeService s, CancellationToken ct) => s.SearchAsync(q, ct)).RequirePermission(Permissions.MaintenanceRead);
+        g.MapPost("/knowledge/{id:guid}/helpful", async (Guid id, FixKnowledgeService s, CancellationToken ct) =>
+        {
+            await s.HelpfulAsync(id, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.MaintenanceExecute);
         g.MapPut("/work-orders/{id:guid}/checklist", async (Guid id, ChecklistRequest r, MaintenanceService s, CancellationToken ct) =>
         {
             await s.SaveChecklistAsync(id, r, ct);

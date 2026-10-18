@@ -75,7 +75,8 @@ public static class MaintenanceRules
     public static string Unit(string trigger) => trigger switch { "Calendar" => "days", "RunHours" => "running hours", _ => "cycles" };
 }
 
-public sealed class MaintenanceService(IMaintenanceRepository repo, IProductionRepository production, ModuleGate gate, ICurrentUser me, IAuditLog audit)
+public sealed class MaintenanceService(IMaintenanceRepository repo, IProductionRepository production, IFixKnowledgeRepository knowledge, ModuleGate gate,
+    ICurrentUser me, IAuditLog audit)
 {
     private static readonly System.Text.Json.JsonSerializerOptions Web = new(System.Text.Json.JsonSerializerDefaults.Web);
 
@@ -179,6 +180,10 @@ public sealed class MaintenanceService(IMaintenanceRepository repo, IProductionR
                 if (wo.Checklist.Any(c => !c.Done))
                 {
                     throw AppException.Validation($"Tick every checklist item first ({wo.Checklist.Count(c => !c.Done)} open).");
+                }
+                if (FixKnowledgeService.NeedsResolution(wo.Type) && await knowledge.ResolutionAsync(tenantId, id, ct) is null)
+                {
+                    throw AppException.Validation("Record the cause and the fix first, so the next technician can find them.");
                 }
                 await repo.SetStatusAsync(tenantId, id, "Done", wo.AssignedTo ?? me.UserId, ct);
                 if (wo.PlanId is { } planId)

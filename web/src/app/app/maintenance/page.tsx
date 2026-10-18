@@ -5,6 +5,7 @@ import Link from "next/link";
 import { CalendarClock, Check, ClipboardList, Play, Plus, Timer, Wrench, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { FixLibrary, ResolutionPanel } from "@/components/fix-knowledge";
 import { Badge, Button, Card, ErrorNote, Field, Input, Modal, PageHeader, Select, Stat, Table, cx, errorText } from "@/components/ui";
 
 type Item = { text: string; done: boolean };
@@ -28,7 +29,7 @@ export default function MaintenancePage() {
   const { can } = useAuth();
   const execute = can("maintenance.execute");
   const manage = can("maintenance.manage");
-  const [tab, setTab] = useState<"orders" | "plans" | "reliability">("orders");
+  const [tab, setTab] = useState<"orders" | "plans" | "reliability" | "fixes">("orders");
   const [kpis, setKpis] = useState<Kpis | null>(null);
   const [orders, setOrders] = useState<Wo[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -118,7 +119,7 @@ export default function MaintenancePage() {
         </div>
       )}
       <div className="mb-4 flex gap-1 border-b border-line">
-        {([["orders", "Work orders"], ["plans", "Preventive plans"], ["reliability", "Reliability"]] as const).map(([t, label]) => (
+        {([["orders", "Work orders"], ["plans", "Preventive plans"], ["reliability", "Reliability"], ["fixes", "Fix library"]] as const).map(([t, label]) => (
           <button key={t} onClick={() => setTab(t)} className={cx("-mb-px border-b-2 px-4 py-2 text-sm", tab === t ? "border-brand font-medium text-brand" : "border-transparent text-muted hover:text-ink")}>{label}</button>
         ))}
       </div>
@@ -181,7 +182,9 @@ export default function MaintenancePage() {
         </Card>
       )}
 
-      <Modal open={!!open} title={open?.title ?? ""} onClose={() => setOpen(null)}>
+      {tab === "fixes" && <FixLibrary />}
+
+      <Modal open={!!open} wide title={open?.title ?? ""} onClose={() => setOpen(null)}>
         {open && <WoDetail wo={open} users={users} execute={execute} manage={manage} onAct={act} onChecklist={saveChecklist} onAssign={assign} />}
       </Modal>
       <Modal open={newWo} title="New work order" onClose={() => setNewWo(false)}>
@@ -216,6 +219,9 @@ function WoDetail({ wo, users, execute, manage, onAct, onChecklist, onAssign }: 
 }) {
   const [notes, setNotes] = useState(wo.notes ?? "");
   const live = wo.status === "Open" || wo.status === "InProgress";
+  const needsFix = wo.type !== "Preventive";
+  const [recorded, setRecorded] = useState(false);
+  const onResolved = useCallback((r: boolean) => setRecorded(r), []);
   return (
     <div className="space-y-4 text-sm">
       <div className="flex flex-wrap gap-2"><Badge tone={typeTone[wo.type]}>{wo.type}</Badge><Badge tone={statusTone[wo.status]}>{wo.status}</Badge>{wo.overdue && <Badge tone="bad">overdue</Badge>}
@@ -238,13 +244,15 @@ function WoDetail({ wo, users, execute, manage, onAct, onChecklist, onAssign }: 
           </ul>
         </div>
       )}
+      {(needsFix || wo.status === "Done") && <ResolutionPanel woId={wo.maintWoId} editable={execute && wo.status !== "Cancelled"} required={needsFix && live} onChange={onResolved} />}
       <Field label="Notes"><Input value={notes} disabled={!execute || !live} onChange={(e) => setNotes(e.target.value)} onBlur={() => notes !== (wo.notes ?? "") && onChecklist(wo, wo.checklist, notes || null)} /></Field>
       <p className="text-xs text-muted">Created {when(wo.createdAt)} · due {when(wo.dueAt)}{wo.startedAt && ` · started ${when(wo.startedAt)}`}{wo.completedAt && ` · finished ${when(wo.completedAt)}`}</p>
       {execute && live && (
         <div className="flex justify-end gap-2">
           <Button variant="ghost" className="text-bad" onClick={() => onAct(wo.maintWoId, "cancel")}><X size={14} /> Cancel order</Button>
           {wo.status === "Open" && <Button variant="outline" onClick={() => onAct(wo.maintWoId, "start")}><Play size={14} /> Start</Button>}
-          <Button onClick={() => onAct(wo.maintWoId, "complete")} disabled={wo.checklist.some((c) => !c.done)}><Check size={14} /> Complete</Button>
+          <Button onClick={() => onAct(wo.maintWoId, "complete")} disabled={wo.checklist.some((c) => !c.done) || (needsFix && !recorded)}
+            title={needsFix && !recorded ? "Record the cause and the fix first" : undefined}><Check size={14} /> Complete</Button>
         </div>
       )}
     </div>
