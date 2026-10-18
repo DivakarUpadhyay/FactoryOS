@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth";
 import { useLive } from "@/lib/live";
 import { SensorType } from "@/lib/types";
 import { FixSuggestions } from "@/components/fix-knowledge";
+import { AuthImage } from "@/components/camera";
 import { Badge, Button, Card, ErrorNote, Field, Input, Modal, PageHeader, Select, Stat, Table, cx, errorText } from "@/components/ui";
 
 type Alarm = {
@@ -115,6 +116,7 @@ function AlarmList({ open, canAck, onChange }: { open: boolean; canAck: boolean;
       <Modal open={!!ack} wide title="Acknowledge alarm" onClose={() => setAck(null)}>
         <form onSubmit={acknowledge} className="space-y-4">
           <p className="text-sm">{ack?.message}</p>
+          {ack && <AuthImage path={`/api/v1/alarms/${ack.alarmId}/snapshot`} alt="Camera picture when the alarm was raised" className="max-h-72 w-full rounded-lg border border-line bg-black object-contain" />}
           {ack && <FixSuggestions path={`/api/v1/maintenance/alarms/${ack.alarmId}/suggestions`} onUse={(f) => setComment(`Trying the earlier fix: ${f.fix}`.slice(0, 300))} />}
           <Field label="What is being done?" hint="Optional; shown to the team"><Input value={comment} maxLength={300} onChange={(e) => setComment(e.target.value)} /></Field>
           <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={() => setAck(null)}>Cancel</Button><Button type="submit">Acknowledge</Button></div>

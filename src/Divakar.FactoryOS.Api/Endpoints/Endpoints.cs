@@ -42,6 +42,11 @@ public static class Endpoints
         MapProduction(api.MapGroup("/production").WithTags("Production"));
         MapRobotics(api.MapGroup("/robotics").WithTags("Robotics"));
         MapAlarms(api.MapGroup("/alarms").WithTags("Alarms"));
+        api.MapGet("/alarms/{alarmId:long}/snapshot", async (long alarmId, CameraService s, CancellationToken ct) =>
+        {
+            var img = await s.AlarmSnapshotAsync(alarmId, ct);
+            return Results.File(img.Data, img.ContentType);
+        }).RequirePermission(Permissions.AlarmsRead).WithTags("Alarms");
         MapMaintenance(api.MapGroup("/maintenance").WithTags("Maintenance"));
         MapQuality(api.MapGroup("/quality").WithTags("Quality"));
         MapInventory(api.MapGroup("/inventory").WithTags("Inventory"));
@@ -557,6 +562,17 @@ public static class Endpoints
         a.MapPost("/test", (Guid assetId, ConnectivityService s, CancellationToken ct) => s.TestAsync(assetId, ct))
             .RequirePermission(Permissions.ConnectivityManage);
         a.MapGet("/live", (Guid assetId, ConnectivityService s, CancellationToken ct) => s.LiveAsync(assetId, ct)).RequirePermission(Permissions.PlantRead);
+        a.MapGet("/camera", (Guid assetId, CameraService s, CancellationToken ct) => s.GetAsync(assetId, ct)).RequirePermission(Permissions.PlantRead);
+        a.MapPut("/camera", async (Guid assetId, SaveCameraRequest r, CameraService s, CancellationToken ct) =>
+        {
+            await s.SaveAsync(assetId, r, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.ConnectivityManage);
+        a.MapGet("/camera/snapshot", async (Guid assetId, CameraService s, CancellationToken ct) =>
+        {
+            var img = await s.SnapshotAsync(assetId, ct);
+            return Results.File(img.Data, img.ContentType);
+        }).RequirePermission(Permissions.PlantRead);
         a.MapGet("/power-sense", (Guid assetId, PowerSenseService s, CancellationToken ct) => s.GetAsync(assetId, ct)).RequirePermission(Permissions.PlantRead);
         a.MapPut("/power-sense", async (Guid assetId, SavePowerProfileRequest r, PowerSenseService s, CancellationToken ct) =>
         {

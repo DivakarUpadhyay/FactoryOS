@@ -36,6 +36,8 @@ public static class DependencyInjection
         services.AddScoped<PowerSenseService>();
         services.AddScoped<FixKnowledgeService>();
         services.AddScoped<OperatorService>();
+        services.AddScoped<CameraService>();
+        services.AddScoped<CameraSnapshotJob>();
         services.AddScoped<PowerSenseJob>();
         services.AddScoped<FloorService>();
         services.AddScoped<SettingsService>();

@@ -122,6 +122,15 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown 
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
+/** Fetches a picture or file with the access token (an <img src> cannot send it) and returns an object URL; the caller revokes it. */
+export async function apiBlobUrl(path: string): Promise<string> {
+  const send = () => fetch(`${API_URL}${path}`, { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} });
+  let res = await send();
+  if (res.status === 401 && (await refresh())) res = await send();
+  if (!res.ok) throw await readError(res);
+  return URL.createObjectURL(await res.blob());
+}
+
 export const auth = {
   async login(email: string, password: string): Promise<Me> {
     const res = await fetch(`${API_URL}/api/v1/auth/login`, {
