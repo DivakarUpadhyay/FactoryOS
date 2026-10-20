@@ -27,6 +27,7 @@ public static class DependencyInjection
     {
         services.AddSingleton(new AuthOptions());
         services.AddScoped<AuthService>();
+        services.AddScoped<AccountSecurityService>();
         services.AddScoped<TenantService>();
         services.AddScoped<UserService>();
         services.AddScoped<PlantService>();

@@ -20,6 +20,7 @@ export const platformNav: NavItem[] = [
   { href: "/platform/plans", label: "Plans & pricing", icon: CreditCard, permission: "platform.plans.manage" },
   { href: "/platform/billing", label: "Billing", icon: Receipt, permission: "platform.tenants.manage" },
   { href: "/platform/audit", label: "Audit log", icon: ScrollText, permission: "audit.read" },
+  { href: "/platform/security", label: "Sign-in & security", icon: ShieldCheck },
 ];
 
 export const appNav: NavItem[] = [
@@ -46,6 +47,7 @@ export const appNav: NavItem[] = [
   { href: "/app/audit", label: "Audit log", icon: ScrollText, permission: "audit.read" },
   { href: "/app/settings", label: "Settings", icon: Settings2, permission: "plant.read" },
   { href: "/app/account", label: "Plan, billing & API", icon: CreditCard, permission: "plant.read" },
+  { href: "/app/security", label: "Sign-in & security", icon: ShieldCheck },
 ];
 
 function useTheme() {

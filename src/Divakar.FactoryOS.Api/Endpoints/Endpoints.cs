@@ -59,8 +59,38 @@ public static class Endpoints
 
     private static void MapAuth(RouteGroupBuilder g)
     {
-        g.MapPost("/login", (LoginRequest r, AuthService s, CancellationToken ct) => s.LoginAsync(r, ct))
-            .RequireRateLimiting(AuthRateLimit);
+        g.MapPost("/login", async (LoginRequest r, AuthService s, CancellationToken ct) =>
+        {
+            var outcome = await s.LoginAsync(r, ct);
+            return outcome.Session is { } session ? Results.Ok(session) : Results.Ok(new { mfaRequired = true, mfaToken = outcome.MfaToken });
+        }).RequireRateLimiting(AuthRateLimit);
+        g.MapPost("/login/2fa", (MfaRequest r, AuthService s, CancellationToken ct) => s.CompleteMfaAsync(r, ct)).RequireRateLimiting(AuthRateLimit);
+        g.MapPost("/forgot", async (ForgotPasswordRequest r, AccountSecurityService s, CancellationToken ct) =>
+        {
+            await s.ForgotAsync(r, ct);
+            return Results.Accepted();
+        }).RequireRateLimiting(AuthRateLimit);
+        g.MapPost("/reset", async (ResetPasswordRequest r, AccountSecurityService s, CancellationToken ct) =>
+        {
+            await s.ResetAsync(r, ct);
+            return Results.NoContent();
+        }).RequireRateLimiting(AuthRateLimit);
+        g.MapPost("/password", async (ChangePasswordRequest r, AccountSecurityService s, CancellationToken ct) =>
+        {
+            await s.ChangePasswordAsync(r, ct);
+            return Results.NoContent();
+        }).RequireAuthorization().RequireRateLimiting(AuthRateLimit);
+        var twoFactor = g.MapGroup("/2fa").RequireAuthorization();
+        twoFactor.MapGet("/", (AccountSecurityService s, CancellationToken ct) => s.StatusAsync(ct));
+        twoFactor.MapPost("/setup", (AccountSecurityService s, CancellationToken ct) => s.BeginSetupAsync(ct));
+        twoFactor.MapPost("/enable", (CodeRequest r, AccountSecurityService s, CancellationToken ct) => s.EnableAsync(r, ct)).RequireRateLimiting(AuthRateLimit);
+        twoFactor.MapPost("/disable", async (DisableTwoFactorRequest r, AccountSecurityService s, CancellationToken ct) =>
+        {
+            await s.DisableAsync(r, ct);
+            return Results.NoContent();
+        }).RequireRateLimiting(AuthRateLimit);
+        twoFactor.MapPost("/recovery-codes", (CodeRequest r, AccountSecurityService s, CancellationToken ct) => s.NewRecoveryCodesAsync(r, ct)).RequireRateLimiting(AuthRateLimit);
+
         // Every full page load refreshes, so this limit is looser than the password endpoints'.
         g.MapPost("/refresh", (RefreshRequest r, AuthService s, CancellationToken ct) => s.RefreshAsync(r, ct))
             .RequireRateLimiting(RefreshRateLimit);
@@ -113,6 +143,13 @@ public static class Endpoints
         users.MapGet("/", (UserService s, CancellationToken ct) => s.UsersAsync(ct)).RequirePermission(Permissions.UsersRead);
         users.MapPost("/", async (CreateUserRequest r, UserService s, CancellationToken ct) =>
             Results.Created("/api/v1/users", new { userId = await s.CreateAsync(r, ct) })).RequirePermission(Permissions.UsersManage);
+        users.MapPost("/{id:guid}/reset-link", (Guid id, AccountSecurityService s, CancellationToken ct) => s.AdminResetLinkAsync(id, ct))
+            .RequirePermission(Permissions.UsersManage);
+        users.MapPost("/{id:guid}/reset-2fa", async (Guid id, AccountSecurityService s, CancellationToken ct) =>
+        {
+            await s.AdminResetTwoFactorAsync(id, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.UsersManage);
         users.MapPatch("/{id:guid}", async (Guid id, UpdateUserRequest r, UserService s, CancellationToken ct) =>
         {
             await s.UpdateAsync(id, r, ct);

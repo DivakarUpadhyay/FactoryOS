@@ -17,6 +17,8 @@ export default function UsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<Form | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [resetLink, setResetLink] = useState<string | null>(null);
+  const [formNotice, setFormNotice] = useState<string | null>(null);
 
   const load = useCallback(() => {
     Promise.all([api<UserSummary[]>("/api/v1/users"), api<Role[]>("/api/v1/roles")])
@@ -75,7 +77,7 @@ export default function UsersPage() {
         </Table>
       </Card>
 
-      <Modal open={!!form} title={form?.userId ? "Edit user" : "Add user"} onClose={() => setForm(null)}>
+      <Modal open={!!form} title={form?.userId ? "Edit user" : "Add user"} onClose={() => { setForm(null); setResetLink(null); setFormNotice(null); }}>
         {form && (
           <form onSubmit={save} className="space-y-3">
             <ErrorNote error={formError} />
@@ -96,6 +98,22 @@ export default function UsersPage() {
                 ))}
               </div>
             </div>
+            {form.userId && form.userId !== me?.userId && (
+              <div className="space-y-2 rounded-lg border border-line p-3">
+                <div className="text-sm font-medium">Locked out?</div>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" className="py-1" onClick={async () => {
+                    try { setResetLink((await api<{ url: string }>(`/api/v1/users/${form.userId}/reset-link`, { method: "POST" })).url); setFormError(null); } catch (err) { setFormError(errorText(err)); }
+                  }}>Create password reset link</Button>
+                  <Button type="button" variant="outline" className="py-1" onClick={async () => {
+                    if (!confirm("Turn off two-step sign-in for this user? They sign in with the password only and can set it up again.")) return;
+                    try { await api(`/api/v1/users/${form.userId}/reset-2fa`, { method: "POST" }); setFormNotice("Two-step sign-in turned off; the user is signed out everywhere."); } catch (err) { setFormError(errorText(err)); }
+                  }}>Reset two-step sign-in</Button>
+                </div>
+                {resetLink && <div className="text-xs"><div className="text-muted">Send this link to the user (works once, 30 minutes):</div><div className="select-all break-all rounded bg-panel-2 p-2 font-mono">{resetLink}</div></div>}
+                {formNotice && <div className="text-xs text-ok">{formNotice}</div>}
+              </div>
+            )}
             {form.userId && (
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} /> Active (can sign in)

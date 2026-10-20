@@ -51,12 +51,13 @@ public sealed class AuthOptions
 }
 
 public sealed class AuthService(
-    IAuthRepository repo, IPasswordHasher hasher, ITokenService tokens, IClock clock, IAuditLog audit, AuthOptions options)
+    IAuthRepository repo, IPasswordHasher hasher, ITokenService tokens, IClock clock, IAuditLog audit, AuthOptions options,
+    IAccountSecurityRepository security, SecurityOptions securityOptions)
 {
     // Checked against a real hash when the email is unknown, so response time does not reveal which emails exist.
     private static string? dummyHash;
 
-    public async Task<AuthResult> LoginAsync(LoginRequest request, CancellationToken ct)
+    public async Task<LoginOutcome> LoginAsync(LoginRequest request, CancellationToken ct)
     {
         var email = (request.Email ?? "").Trim().ToLowerInvariant();
         var user = await repo.FindByEmailAsync(email, ct);
@@ -80,6 +81,51 @@ public sealed class AuthService(
             throw AppException.Unauthorized();
         }
         EnsureMaySignIn(user, now);
+        if ((await security.TotpAsync(user.UserId, ct))?.Enabled == true)
+        {
+            // the password was right; the session waits for the authenticator code
+            var (token, hash) = OneTimeToken.New();
+            await security.CreateTokenAsync(hash, user.UserId, "mfa", now.AddMinutes(securityOptions.MfaStepMinutes), ct);
+            return new LoginOutcome(null, token);
+        }
+        await repo.RecordLoginAsync(user.UserId, now, ct);
+        await audit.WriteForAsync(user.TenantId, user.UserId, "login", "user", ct);
+        return new LoginOutcome(await IssueAsync(user, Guid.NewGuid(), null, ct), null);
+    }
+
+    /// <summary>Second step of a sign-in: a code from the authenticator app, or one of the recovery codes.</summary>
+    public async Task<AuthResult> CompleteMfaAsync(MfaRequest request, CancellationToken ct)
+    {
+        var now = clock.UtcNow;
+        var hash = Totp.Hash(request.MfaToken ?? "");
+        var row = await security.TokenAsync(hash, ct);
+        if (row is null || row.Purpose != "mfa" || row.UsedAt is not null || row.ExpiresAt <= now || row.Attempts >= securityOptions.MaxCodeAttempts)
+        {
+            throw AppException.Unauthorized("The sign-in timed out. Enter your password again.");
+        }
+        var user = await repo.FindByIdAsync(row.UserId, ct) ?? throw AppException.Unauthorized();
+        EnsureMaySignIn(user, now);
+        var t = await security.TotpAsync(user.UserId, ct);
+        if (t is not { Enabled: true, Secret: not null })
+        {
+            throw AppException.Unauthorized("The sign-in timed out. Enter your password again.");
+        }
+        if (Totp.Verify(t.Secret, request.Code, now, t.LastStep) is { } step)
+        {
+            await security.SetLastStepAsync(user.UserId, step, ct);
+        }
+        else if (t.RecoveryHashes.Contains(Totp.Hash(request.Code ?? "")))
+        {
+            await security.SetRecoveryHashesAsync(user.UserId, [.. t.RecoveryHashes.Where(h => h != Totp.Hash(request.Code ?? ""))], ct);
+            await audit.WriteForAsync(user.TenantId, user.UserId, "2fa.recovery-code-used", "user", ct);
+        }
+        else
+        {
+            await security.CountAttemptAsync(hash, ct);
+            await audit.WriteForAsync(user.TenantId, user.UserId, "login.failed-code", "user", ct);
+            throw AppException.Unauthorized("That code is not right.");
+        }
+        await security.UseTokenAsync(hash, now, ct);
         await repo.RecordLoginAsync(user.UserId, now, ct);
         await audit.WriteForAsync(user.TenantId, user.UserId, "login", "user", ct);
         return await IssueAsync(user, Guid.NewGuid(), null, ct);

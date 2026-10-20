@@ -9,13 +9,15 @@ import { api } from "@/lib/api";
 import { Button, ErrorNote, Field, Input, errorText } from "@/components/ui";
 
 export default function LoginPage() {
-  const { login, me } = useAuth();
+  const { login, verifyCode, me } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [needsSetup, setNeedsSetup] = useState(false);
+  const [mfaToken, setMfaToken] = useState<string | null>(null);
+  const [code, setCode] = useState("");
 
   // ?next=/op sends a signed-in operator back to the shop-floor app
   const next = () => {
@@ -36,8 +38,12 @@ export default function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      const user = await login(email, password);
-      router.replace(user.isSuperAdmin ? "/platform" : next() ?? "/app");
+      const result = mfaToken ? await verifyCode(mfaToken, code) : await login(email, password);
+      if ("mfaToken" in result) {
+        setMfaToken(result.mfaToken);   // password accepted: now the code from the authenticator app
+        return;
+      }
+      router.replace(result.isSuperAdmin ? "/platform" : next() ?? "/app");
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -84,15 +90,29 @@ export default function LoginPage() {
             <p className="mt-1 text-sm text-muted">Use the account your administrator created for you.</p>
           </div>
           <ErrorNote error={error} />
-          <Field label="Email">
-            <Input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} />
-          </Field>
-          <Field label="Password">
-            <Input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-          </Field>
-          <Button type="submit" disabled={busy} className="w-full">
-            {busy ? "Signing in…" : "Sign in"}
-          </Button>
+          {mfaToken ? (
+            <>
+              <p className="rounded-lg bg-panel-2 p-3 text-sm">Two-step sign-in is on for this account. Enter the 6-digit code from your authenticator app, or one of your recovery codes.</p>
+              <Field label="Code">
+                <Input autoFocus inputMode="numeric" autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value)} placeholder="123 456" />
+              </Field>
+              <Button type="submit" disabled={busy} className="w-full">{busy ? "Checking…" : "Verify"}</Button>
+              <button type="button" className="w-full text-center text-sm text-muted hover:text-ink" onClick={() => { setMfaToken(null); setCode(""); setError(null); }}>Back</button>
+            </>
+          ) : (
+            <>
+              <Field label="Email">
+                <Input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} />
+              </Field>
+              <Field label="Password">
+                <Input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+              </Field>
+              <Button type="submit" disabled={busy} className="w-full">
+                {busy ? "Signing in…" : "Sign in"}
+              </Button>
+              <p className="text-center text-sm"><Link href="/forgot" className="text-muted hover:text-brand">Forgot password?</Link></p>
+            </>
+          )}
           {needsSetup && (
             <p className="rounded-lg bg-info/10 p-3 text-sm text-info">
               No platform operator exists yet. <Link href="/setup" className="font-medium underline">Run first-time setup</Link> (only

@@ -132,11 +132,23 @@ export async function apiBlobUrl(path: string): Promise<string> {
 }
 
 export const auth = {
-  async login(email: string, password: string): Promise<Me> {
+  /** Signs in; with two-step sign-in on, returns the challenge for the authenticator code instead of a session. */
+  async login(email: string, password: string): Promise<Me | { mfaToken: string }> {
     const res = await fetch(`${API_URL}/api/v1/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
+    });
+    if (!res.ok) throw await readError(res);
+    const body = await res.json();
+    return body.mfaRequired ? { mfaToken: body.mfaToken as string } : accept(body);
+  },
+
+  async verifyCode(mfaToken: string, code: string): Promise<Me> {
+    const res = await fetch(`${API_URL}/api/v1/auth/login/2fa`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mfaToken, code }),
     });
     if (!res.ok) throw await readError(res);
     return accept(await res.json());

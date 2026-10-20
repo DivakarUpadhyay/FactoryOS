@@ -51,6 +51,9 @@ public static class DependencyInjection
         services.AddScoped<IAuditLog, AuditLogWriter>();
         services.AddScoped<IAuditReader, AuditReader>();
         services.AddScoped<IAuthRepository, AuthRepository>();
+        services.AddScoped<IAccountSecurityRepository, AccountSecurityRepository>();
+        services.AddSingleton(config.GetSection("Security").Get<SecurityOptions>() ?? new SecurityOptions());
+        services.AddScoped<IResetMailer, SmtpResetMailer>();
         services.AddScoped<ITenantRepository, TenantRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IPlantRepository, PlantRepository>();
