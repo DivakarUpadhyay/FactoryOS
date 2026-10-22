@@ -84,7 +84,17 @@ builder.Services.AddRateLimiter(o =>
 
 var origins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? ["http://localhost:3000"];
 builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod().AllowCredentials().WithExposedHeaders("Content-Disposition")));
-builder.Services.Configure<ForwardedHeadersOptions>(o => o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto);
+builder.Services.Configure<ForwardedHeadersOptions>(o =>
+{
+    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    // Behind a hosting proxy that is not on this machine (e.g. Hugging Face), trust its X-Forwarded-For so the
+    // per-IP rate limits see each visitor instead of the proxy.
+    if (builder.Configuration.GetValue("Proxy:TrustForwardedHeaders", false))
+    {
+        o.KnownIPNetworks.Clear();
+        o.KnownProxies.Clear();
+    }
+});
 
 var app = builder.Build();
 
