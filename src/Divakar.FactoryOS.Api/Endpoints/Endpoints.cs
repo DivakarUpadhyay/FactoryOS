@@ -57,6 +57,18 @@ public static class Endpoints
             .RequirePermission(Permissions.SettingsManage);
     }
 
+    // The public demo login (Demo:UserId) is shared by everyone, so it may not change its password or two-step sign-in.
+    private static async ValueTask<object?> BlockDemoAccount(EndpointFilterInvocationContext ctx, EndpointFilterDelegate next)
+    {
+        var services = ctx.HttpContext.RequestServices;
+        if (Guid.TryParse(services.GetRequiredService<IConfiguration>()["Demo:UserId"], out var demoId)
+            && services.GetRequiredService<ICurrentUser>().UserId == demoId)
+        {
+            throw AppException.Forbidden("The public demo account cannot change its password or two-step sign-in.");
+        }
+        return await next(ctx);
+    }
+
     private static void MapAuth(RouteGroupBuilder g)
     {
         g.MapPost("/login", async (LoginRequest r, AuthService s, CancellationToken ct) =>
@@ -79,8 +91,8 @@ public static class Endpoints
         {
             await s.ChangePasswordAsync(r, ct);
             return Results.NoContent();
-        }).RequireAuthorization().RequireRateLimiting(AuthRateLimit);
-        var twoFactor = g.MapGroup("/2fa").RequireAuthorization();
+        }).RequireAuthorization().RequireRateLimiting(AuthRateLimit).AddEndpointFilter(BlockDemoAccount);
+        var twoFactor = g.MapGroup("/2fa").RequireAuthorization().AddEndpointFilter(BlockDemoAccount);
         twoFactor.MapGet("/", (AccountSecurityService s, CancellationToken ct) => s.StatusAsync(ct));
         twoFactor.MapPost("/setup", (AccountSecurityService s, CancellationToken ct) => s.BeginSetupAsync(ct));
         twoFactor.MapPost("/enable", (CodeRequest r, AccountSecurityService s, CancellationToken ct) => s.EnableAsync(r, ct)).RequireRateLimiting(AuthRateLimit);

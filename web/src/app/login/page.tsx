@@ -8,6 +8,9 @@ import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { Button, ErrorNote, Field, Input, errorText } from "@/components/ui";
 
+// Public read-only account in the demo factory (Viewer role; the API blocks password and 2FA changes for it).
+const DEMO = { email: "demo@divakar-demo.local", password: "FactoryDemo@2026" };
+
 export default function LoginPage() {
   const { login, verifyCode, me } = useAuth();
   const router = useRouter();
@@ -111,6 +114,17 @@ export default function LoginPage() {
                 {busy ? "Signing in…" : "Sign in"}
               </Button>
               <p className="text-center text-sm"><Link href="/forgot" className="text-muted hover:text-brand">Forgot password?</Link></p>
+              <div className="rounded-lg border border-line bg-panel-2 p-3 text-sm">
+                <p className="font-medium">Try the demo (read only)</p>
+                <p className="mt-1 text-muted">
+                  Email: <span className="font-mono text-ink">{DEMO.email}</span>
+                  <br />
+                  Password: <span className="font-mono text-ink">{DEMO.password}</span>
+                </p>
+                <Button type="button" variant="outline" className="mt-2 w-full" onClick={() => { setEmail(DEMO.email); setPassword(DEMO.password); setError(null); }}>
+                  Use demo login
+                </Button>
+              </div>
             </>
           )}
           {needsSetup && (
