@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { AlarmBell } from "./alarm-bell";
+import { LogoMark } from "./logo";
 import { cx } from "./ui";
 
 export type NavItem = { href: string; label: string; icon: React.ElementType; permission?: string; module?: string; soon?: string };
@@ -107,7 +108,7 @@ export function Shell({ nav, area, children }: { nav: NavItem[]; area: "platform
         )}
       >
         <div className="flex h-14 items-center gap-2 border-b border-line px-4">
-          <div className="grid h-8 w-8 place-items-center rounded-lg bg-brand text-sm font-bold text-white">D</div>
+          <LogoMark className="h-8 w-8 shrink-0" />
           <div className="leading-tight">
             <div className="text-sm font-semibold">Divakar FactoryOS</div>
             <div className="text-xs text-muted">{area === "platform" ? "Platform console" : me.tenantName}</div>

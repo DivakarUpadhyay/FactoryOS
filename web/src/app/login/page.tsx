@@ -7,6 +7,7 @@ import { Factory, Zap, Bot, Gauge } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { Button, ErrorNote, Field, Input, errorText } from "@/components/ui";
+import { LogoMark } from "@/components/logo";
 
 // Public read-only account in the demo factory (Viewer role; the API blocks password and 2FA changes for it).
 const DEMO = { email: "demo@divakar-demo.local", password: "FactoryDemo@2026" };
@@ -57,8 +58,8 @@ export default function LoginPage() {
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
       <div className="hidden flex-col justify-between bg-gradient-to-br from-[#0b1017] via-[#0f2a2a] to-[#0f766e] p-10 text-white lg:flex">
-        <div className="flex items-center gap-2">
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-white/15 font-bold">D</div>
+        <div className="flex items-center gap-3">
+          <LogoMark className="h-9 w-9 shrink-0 ring-1 ring-white/20 rounded-lg" />
           <span className="font-semibold">Divakar FactoryOS</span>
         </div>
         <div>
