@@ -12,14 +12,21 @@ public sealed class EnergyRepository(Db db) : IEnergyRepository
         CancellationToken ct)
     {
         await using var con = await db.OpenAsync(ct);
+        // A counter's use is the sum of its rises between readings: a drop (meter replaced, reset or rolled over, gateway
+        // restarted) adds nothing instead of turning the whole range into consumption.
         return [.. await con.QueryAsync<CounterDelta>(new CommandDefinition("""
+            WITH steps AS (
+                SELECT r.TagId, r.Value - LAG(r.Value) OVER (PARTITION BY r.TagId ORDER BY r.Ts) AS Step
+                FROM telemetry.Readings r
+                WHERE r.TenantId = @tenantId AND r.Ts >= @from AND r.Ts < @to AND r.Quality <= 1 AND r.Value IS NOT NULL
+                  AND r.TagId IN (SELECT TagId FROM plant.Tags WHERE TenantId = @tenantId AND SensorTypeCode IN @sensorTypes))
             SELECT a.AssetId, a.Code AS AssetCode, a.Name AS AssetName, a.AssetTypeCode, at.Category, n.Level AS NodeLevel,
-                   t.TagId, t.SensorTypeCode, CAST(ISNULL(MAX(r.Value) - MIN(r.Value), 0) AS float) AS Delta
+                   t.TagId, t.SensorTypeCode, CAST(ISNULL(SUM(CASE WHEN s.Step > 0 THEN s.Step ELSE 0 END), 0) AS float) AS Delta
             FROM plant.Tags t
             JOIN plant.Assets a ON a.AssetId = t.AssetId
             JOIN plant.AssetTypes at ON at.AssetTypeCode = a.AssetTypeCode
             JOIN plant.Nodes n ON n.NodeId = a.NodeId
-            JOIN telemetry.Readings r ON r.TagId = t.TagId AND r.Ts >= @from AND r.Ts < @to AND r.Quality <= 1 AND r.Value IS NOT NULL
+            JOIN steps s ON s.TagId = t.TagId
             WHERE t.TenantId = @tenantId AND t.SensorTypeCode IN @sensorTypes AND t.IsActive = 1 AND a.IsActive = 1
             GROUP BY a.AssetId, a.Code, a.Name, a.AssetTypeCode, at.Category, n.Level, t.TagId, t.SensorTypeCode
             """, new { tenantId, sensorTypes, from, to }, commandTimeout: 120, cancellationToken: ct))];
@@ -33,12 +40,20 @@ public sealed class EnergyRepository(Db db) : IEnergyRepository
             return [];
         }
         await using var con = await db.OpenAsync(ct);
+        // Buckets of the counter's running total of rises (see CounterDeltasAsync), which only goes up, so a reset inside a
+        // bucket cannot inflate it.
         return [.. await con.QueryAsync<CounterBucket>(new CommandDefinition("""
-            SELECT r.TagId, b.Bucket, MAX(r.Value) AS MaxValue, MIN(r.Value) AS MinValue
-            FROM telemetry.Readings r
-            CROSS APPLY (SELECT DATEADD(MINUTE, (DATEDIFF(MINUTE, '2000-01-01', DATEADD(MINUTE, @offset, r.Ts)) / @bucket) * @bucket, '2000-01-01') AS Bucket) b
-            WHERE r.TenantId = @tenantId AND r.TagId IN @tagIds AND r.Ts >= @from AND r.Ts < @to AND r.Value IS NOT NULL AND r.Quality <= 1
-            GROUP BY r.TagId, b.Bucket
+            WITH steps AS (
+                SELECT r.TagId, r.Ts, r.Value - LAG(r.Value) OVER (PARTITION BY r.TagId ORDER BY r.Ts) AS Step
+                FROM telemetry.Readings r
+                WHERE r.TenantId = @tenantId AND r.TagId IN @tagIds AND r.Ts >= @from AND r.Ts < @to AND r.Value IS NOT NULL AND r.Quality <= 1
+            ), total AS (
+                SELECT TagId, Ts, SUM(CASE WHEN Step > 0 THEN Step ELSE 0 END) OVER (PARTITION BY TagId ORDER BY Ts ROWS UNBOUNDED PRECEDING) AS Total
+                FROM steps)
+            SELECT x.TagId, b.Bucket, MAX(x.Total) AS MaxValue, MIN(x.Total) AS MinValue
+            FROM total x
+            CROSS APPLY (SELECT DATEADD(MINUTE, (DATEDIFF(MINUTE, '2000-01-01', DATEADD(MINUTE, @offset, x.Ts)) / @bucket) * @bucket, '2000-01-01') AS Bucket) b
+            GROUP BY x.TagId, b.Bucket
             """, new { tenantId, tagIds, from, to, bucket = bucketMinutes, offset = utcOffsetMinutes }, commandTimeout: 120, cancellationToken: ct))];
     }
 

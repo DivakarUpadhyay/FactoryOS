@@ -1,5 +1,6 @@
 using Divakar.FactoryOS.Application.Abstractions;
 using Divakar.FactoryOS.Application.Common;
+using Divakar.FactoryOS.Application.Enms;
 using Divakar.FactoryOS.Application.Settings;
 
 namespace Divakar.FactoryOS.Application.Energy;
@@ -45,9 +46,19 @@ public sealed record PqPoint(Guid AssetId, string AssetName, string AssetTypeCod
 
 public sealed record DayCarbon(DateTime Day, double GridKwh, double SolarKwh, double GasM3, double Scope1Kg, double Scope2Kg);
 
+/// <summary>
+/// Scope 1 and 2 for a period. Factors come from the company's emission factor library for the period's year (settings are
+/// the fallback); Scope 2 is reported location-based and market-based (GHG Protocol Scope 2 Guidance), where green power
+/// bought with certificates or a PPA counts at zero.
+/// </summary>
 public sealed record CarbonReport(DateTime From, DateTime To, decimal ElectricityFactor, decimal GasFactor, double GridKwh, double SolarKwh,
     double GasM3, double Scope1Kg, double Scope2Kg, double AvoidedKg, double TotalKg, double? KgPerPart, double Parts,
-    IReadOnlyList<DayCarbon> Daily, IReadOnlyList<AreaCarbon> ByArea);
+    IReadOnlyList<DayCarbon> Daily, IReadOnlyList<AreaCarbon> ByArea,
+    string? ElectricityReference = null, string? GasReference = null, IReadOnlyList<FuelEmission>? Fuels = null, double Scope2MarketKg = 0,
+    double GreenKwh = 0, double UnmeteredKwh = 0);
+
+/// <summary>A fuel (or unmetered electricity) entered from bills or deliveries, with its share of the period and emissions.</summary>
+public sealed record FuelEmission(string Source, string Unit, double Quantity, decimal Factor, double Kg, byte Scope, string? FactorName);
 
 public sealed record AreaCarbon(string Meter, double Kg);
 
@@ -55,8 +66,16 @@ public sealed record AreaCarbon(string Meter, double Kg);
 /// Energy, power quality and carbon, computed from the stored readings: energy counters (kWh, Nm³) give consumption by
 /// difference, demand and power tags give peaks, machine state plus power gives idle waste.
 /// </summary>
-public sealed class EnergyService(IEnergyRepository repo, SettingsService settings, ModuleGate gate, ICurrentUser me)
+public sealed class EnergyService(IEnergyRepository repo, SettingsService settings, ModuleGate gate, ICurrentUser me,
+    EmissionFactorProvider factors, IEnmsRepository enms)
 {
+    /// <summary>Grid factor for a year from the library (location-based), else the one in settings.</summary>
+    private async Task<(decimal Kg, string? Reference)> GridFactorAsync(Guid tenantId, TenantSettings s, int year, CancellationToken ct)
+    {
+        var f = EmissionMath.Resolve(await factors.FactorsAsync(tenantId, ct), "electricity", "Location", year);
+        return f is null ? (s.ElectricityFactor, "Settings") : (f.Co2e, $"{f.Name} — {f.Reference}");
+    }
+
     public static readonly string[] PqSensors = ["voltage_ln", "current", "power_factor", "frequency", "thd_voltage", "thd_current"];
 
     private static (DateTime From, DateTime To) Window(DateTime? from, DateTime? to, TimeSpan fallback)
@@ -151,6 +170,7 @@ public sealed class EnergyService(IEnergyRepository repo, SettingsService settin
         var meters = energy.Where(e => e.Category == "Energy").Select(e => Row(e, grid)).OrderByDescending(r => r.Kwh).ToList();
         var machines = energy.Where(e => e.Category != "Energy").Select(e => Row(e, machinesTotal)).OrderByDescending(r => r.Kwh).ToList();
 
+        var gridFactor = (double)(await GridFactorAsync(tenantId, s, TimeZoneInfo.ConvertTimeFromUtc(t, zone).Year, ct)).Kg;
         var insights = new List<string>();
         var contractPct = s.ContractKw is > 0 && peak is not null ? Math.Round(peak.PeakKw / (double)s.ContractKw.Value * 100, 1) : (double?)null;
         if (contractPct > 100)
@@ -177,12 +197,12 @@ public sealed class EnergyService(IEnergyRepository repo, SettingsService settin
         }
         if (solar > 0)
         {
-            insights.Add($"Solar produced {solar:N0} kWh ({solar / Math.Max(grid + solar, 1):P0} of consumption), avoiding {solar * (double)s.ElectricityFactor:N0} kg CO₂e.");
+            insights.Add($"Solar produced {solar:N0} kWh ({solar / Math.Max(grid + solar, 1):P0} of consumption), avoiding {solar * gridFactor:N0} kg CO₂e.");
         }
 
         return new EnergySummary(f, t, s.Currency, Math.Round(grid, 1), Math.Round(solar, 1), Math.Round(grid + solar, 1), cost, avgRate,
             Math.Round(peak?.PeakKw ?? 0, 1), peak?.At, s.ContractKw, contractPct, Math.Round(idleKwh, 1), Math.Round((decimal)idleKwh * avgRate, 0),
-            Math.Round(grid * (double)s.ElectricityFactor, 1), [.. main.Select(m => m.AssetName)], meters, machines, hourly, idle, insights);
+            Math.Round(grid * gridFactor, 1), [.. main.Select(m => m.AssetName)], meters, machines, hourly, idle, insights);
     }
 
     /// <summary>Grades one power-quality value: ok, warn or bad, with a short reason.</summary>
@@ -236,8 +256,13 @@ public sealed class EnergyService(IEnergyRepository repo, SettingsService settin
         var s = await settings.GetAsync(ct);
         var (f, t) = Window(from, to, TimeSpan.FromDays(30));
         var offset = (int)s.Zone().GetUtcOffset(t).TotalMinutes;
-        var ef = (double)s.ElectricityFactor;
-        var gf = (double)s.GasFactor;
+        var year = TimeZoneInfo.ConvertTimeFromUtc(t.AddSeconds(-1), s.Zone()).Year;
+        var lib = await factors.FactorsAsync(tenantId, ct);
+        var (elecFactor, elecRef) = await GridFactorAsync(tenantId, s, year, ct);
+        var gasLib = EmissionMath.Resolve(lib, "natural_gas", "Combustion", year);
+        var gasFactor = gasLib?.Co2e ?? s.GasFactor;
+        var ef = (double)elecFactor;
+        var gf = (double)gasFactor;
 
         var deltas = await repo.CounterDeltasAsync(tenantId, ["energy_kwh", "volume_gas", "part_count"], f, t, ct);
         var energy = deltas.Where(d => d.SensorTypeCode == "energy_kwh").ToList();
@@ -263,10 +288,40 @@ public sealed class EnergyService(IEnergyRepository repo, SettingsService settin
         var byArea = energy.Where(e => e.AssetTypeCode == "energy-meter" && e.NodeLevel == "Area")
             .Select(e => new AreaCarbon(e.AssetName, Math.Round(e.Delta * ef, 1))).OrderByDescending(x => x.Kg).ToList();
 
-        var scope1 = gas * gf;
-        var scope2 = grid * ef;
-        return new CarbonReport(f, t, s.ElectricityFactor, s.GasFactor, Math.Round(grid, 1), Math.Round(solar, 1), Math.Round(gas, 2),
+        // energy no meter reads (bills, fuel deliveries), counted for the part of each entry's period inside this one
+        var fuels = new List<FuelEmission>();
+        double green = 0, unmetered = 0;
+        foreach (var e in await enms.EntriesAsync(tenantId, f.Date, t, ct))
+        {
+            var qty = (double)e.Quantity * EmissionMath.Overlap(e.PeriodFrom, e.PeriodTo, f, t);
+            if (qty <= 0)
+            {
+                continue;
+            }
+            if (e.Source == "green_power")
+            {
+                green += qty;
+                continue;
+            }
+            var isElec = e.Source is "electricity" or "steam";
+            var fac = EmissionMath.Resolve(lib, e.Source, isElec ? "Location" : "Combustion", year);
+            var kgPer = fac?.Co2e ?? (e.Source == "electricity" ? elecFactor : 0);
+            if (e.Source == "electricity")
+            {
+                unmetered += qty;
+            }
+            fuels.Add(new FuelEmission(e.Source, e.Unit, Math.Round(qty, 2), kgPer, Math.Round(qty * (double)kgPer, 1), isElec ? (byte)2 : (byte)1, fac?.Name));
+        }
+        fuels = [.. fuels.GroupBy(x => (x.Source, x.Unit)).Select(g => g.First() with { Quantity = Math.Round(g.Sum(x => x.Quantity), 2), Kg = Math.Round(g.Sum(x => x.Kg), 1) })];
+
+        var scope1 = gas * gf + fuels.Where(x => x.Scope == 1).Sum(x => x.Kg);
+        var scope2 = grid * ef + fuels.Where(x => x.Scope == 2).Sum(x => x.Kg);
+        // market-based: certified green power (T-REC, PPA) replaces grid electricity at zero emissions, never below zero
+        var scope2Market = Math.Max(0, scope2 - Math.Min(green, grid + unmetered) * ef);
+        return new CarbonReport(f, t, elecFactor, gasFactor, Math.Round(grid, 1), Math.Round(solar, 1), Math.Round(gas, 2),
             Math.Round(scope1, 1), Math.Round(scope2, 1), Math.Round(solar * ef, 1), Math.Round(scope1 + scope2, 1),
-            parts > 0 ? Math.Round((scope1 + scope2) / parts, 4) : null, Math.Round(parts, 0), days, byArea);
+            parts > 0 ? Math.Round((scope1 + scope2) / parts, 4) : null, Math.Round(parts, 0), days, byArea,
+            elecRef, gasLib is null ? "Settings" : $"{gasLib.Name} — {gasLib.Reference}", fuels, Math.Round(scope2Market, 1), Math.Round(green, 1),
+            Math.Round(unmetered, 1));
     }
 }

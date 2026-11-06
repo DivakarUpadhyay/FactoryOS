@@ -10,6 +10,7 @@ using Divakar.FactoryOS.Application.Notifications;
 using Divakar.FactoryOS.Application.Common;
 using Divakar.FactoryOS.Application.Connectivity;
 using Divakar.FactoryOS.Application.Energy;
+using Divakar.FactoryOS.Application.Enms;
 using Divakar.FactoryOS.Application.Live;
 using Divakar.FactoryOS.Application.Production;
 using Divakar.FactoryOS.Application.Robotics;
@@ -45,6 +46,8 @@ public static class DependencyInjection
         services.AddScoped<ModuleGate>();
         services.AddScoped<EnergyService>();
         services.AddScoped<EnergyPlanningService>();
+        services.AddScoped<EmissionFactorProvider>();
+        services.AddScoped<EnmsService>();
         services.AddScoped<LoadShedEngine>();
         services.AddScoped<ProductionService>();
         services.AddScoped<PlanningService>();

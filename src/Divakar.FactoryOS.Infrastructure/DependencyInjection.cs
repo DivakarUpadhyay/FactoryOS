@@ -11,6 +11,7 @@ using Divakar.FactoryOS.Application.Auth;
 using Divakar.FactoryOS.Application.Common;
 using Divakar.FactoryOS.Application.Connectivity;
 using Divakar.FactoryOS.Application.Energy;
+using Divakar.FactoryOS.Application.Enms;
 using Divakar.FactoryOS.Application.Production;
 using Divakar.FactoryOS.Application.Robotics;
 using Divakar.FactoryOS.Application.Settings;
@@ -68,6 +69,7 @@ public static class DependencyInjection
         services.AddScoped<IFloorRepository, FloorRepository>();
         services.AddScoped<IEnergyRepository, EnergyRepository>();
         services.AddScoped<ILoadShedRepository, LoadShedRepository>();
+        services.AddScoped<IEnmsRepository, EnmsRepository>();
         services.AddScoped<IAssetBindingSource, AssetBindingSource>();
         services.AddScoped<ISettingsRepository, SettingsRepository>();
         services.AddScoped<IProductionRepository, ProductionRepository>();

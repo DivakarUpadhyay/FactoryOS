@@ -79,8 +79,8 @@ export default function SettingsPage() {
           </Card>
           <Card title="Emission factors">
             <div className="grid gap-4 sm:grid-cols-3">
-              <Field label="Grid electricity" hint="kg CO₂e per kWh (Taiwan 2024: 0.474)"><Input type="number" step="0.001" min="0" value={s.electricityFactor} onChange={num("electricityFactor")} required /></Field>
-              <Field label="Natural gas" hint="kg CO₂e per Nm³"><Input type="number" step="0.01" min="0" value={s.gasFactor} onChange={num("gasFactor")} required /></Field>
+              <Field label="Grid electricity" hint="kg CO₂e per kWh — fallback only; reports use the factor library under ISO 50001 → Emission factors"><Input type="number" step="0.001" min="0" value={s.electricityFactor} onChange={num("electricityFactor")} required /></Field>
+              <Field label="Natural gas" hint="kg CO₂e per Nm³ — fallback only (see the factor library)"><Input type="number" step="0.01" min="0" value={s.gasFactor} onChange={num("gasFactor")} required /></Field>
             </div>
           </Card>
           <Card title="Shifts" actions={edit && <Button type="button" variant="outline" className="py-1" onClick={() => set("shifts", [...s.shifts, { name: "", start: "08:00", end: "16:00", breakMinutes: 30 }])}><Plus size={14} /> Shift</Button>}>

@@ -13,6 +13,7 @@ using Divakar.FactoryOS.Application.Auth;
 using Divakar.FactoryOS.Application.Common;
 using Divakar.FactoryOS.Application.Connectivity;
 using Divakar.FactoryOS.Application.Energy;
+using Divakar.FactoryOS.Application.Enms;
 using Divakar.FactoryOS.Application.Live;
 using Divakar.FactoryOS.Application.Production;
 using Divakar.FactoryOS.Application.Robotics;
@@ -39,6 +40,7 @@ public static class Endpoints
         MapPlant(api.MapGroup("/plant").WithTags("Plant"));
         MapConnectivity(api);
         MapEnergy(api);
+        MapEnms(api.MapGroup("/enms").WithTags("ISO 50001"));
         MapProduction(api.MapGroup("/production").WithTags("Production"));
         MapRobotics(api.MapGroup("/robotics").WithTags("Robotics"));
         MapAlarms(api.MapGroup("/alarms").WithTags("Alarms"));
@@ -260,6 +262,104 @@ public static class Endpoints
         g.MapGet("/load-shed/events", (EnergyPlanningService s, CancellationToken ct) => s.EventsAsync(ct)).RequirePermission(Permissions.EnergyRead);
         g.MapGet("/carbon", (DateTime? from, DateTime? to, EnergyService s, CancellationToken ct) => s.CarbonAsync(from, to, ct))
             .RequirePermission(Permissions.EnergyRead);
+    }
+
+    /// <summary>ISO 50001 energy management system. Anyone who can see energy can read it; changes need energy.manage.</summary>
+    private static void MapEnms(RouteGroupBuilder g)
+    {
+        g.MapGet("/overview", (EnmsService s, CancellationToken ct) => s.OverviewAsync(ct)).RequirePermission(Permissions.EnergyRead);
+        g.MapGet("/review", (DateTime? from, DateTime? to, EnmsService s, CancellationToken ct) => s.ReviewAsync(from, to, ct)).RequirePermission(Permissions.EnergyRead);
+        g.MapGet("/enpis/{id:guid}/results", (Guid id, DateTime? from, DateTime? to, EnmsService s, CancellationToken ct) => s.EnpiResultAsync(id, from, to, ct))
+            .RequirePermission(Permissions.EnergyRead);
+        g.MapGet("/factors", (EnmsService s, CancellationToken ct) => s.FactorsAsync(ct)).RequirePermission(Permissions.EnergyRead);
+        g.MapPost("/factors", async (SaveFactorRequest r, EnmsService s, CancellationToken ct) =>
+            Results.Created("/api/v1/enms/factors", new { factorId = await s.SaveFactorAsync(null, r, ct) })).RequirePermission(Permissions.EnergyManage);
+        g.MapPut("/factors/{id:guid}", async (Guid id, SaveFactorRequest r, EnmsService s, CancellationToken ct) =>
+        {
+            await s.SaveFactorAsync(id, r, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.EnergyManage);
+        g.MapGet("/entries", (EnmsService s, CancellationToken ct) => s.EntriesAsync(ct)).RequirePermission(Permissions.EnergyRead);
+        g.MapPost("/entries", async (SaveEntryRequest r, EnmsService s, CancellationToken ct) =>
+            Results.Created("/api/v1/enms/entries", new { entryId = await s.AddEntryAsync(r, ct) })).RequirePermission(Permissions.EnergyManage);
+        g.MapDelete("/entries/{id:guid}", async (Guid id, EnmsService s, CancellationToken ct) =>
+        {
+            await s.DeleteEntryAsync(id, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.EnergyManage);
+        g.MapGet("/seus", (EnmsService s, CancellationToken ct) => s.SeusAsync(ct)).RequirePermission(Permissions.EnergyRead);
+        g.MapPost("/seus", async (SaveSeuRequest r, EnmsService s, CancellationToken ct) =>
+            Results.Created("/api/v1/enms/seus", new { seuId = await s.SaveSeuAsync(null, r, ct) })).RequirePermission(Permissions.EnergyManage);
+        g.MapPut("/seus/{id:guid}", async (Guid id, SaveSeuRequest r, EnmsService s, CancellationToken ct) =>
+        {
+            await s.SaveSeuAsync(id, r, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.EnergyManage);
+        g.MapDelete("/seus/{id:guid}", async (Guid id, EnmsService s, CancellationToken ct) =>
+        {
+            await s.DeleteSeuAsync(id, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.EnergyManage);
+        g.MapGet("/enpis", (EnmsService s, CancellationToken ct) => s.EnpisAsync(ct)).RequirePermission(Permissions.EnergyRead);
+        g.MapPost("/enpis", async (SaveEnpiRequest r, EnmsService s, CancellationToken ct) =>
+            Results.Created("/api/v1/enms/enpis", new { enpiId = await s.AddEnpiAsync(r, ct) })).RequirePermission(Permissions.EnergyManage);
+        g.MapDelete("/enpis/{id:guid}", async (Guid id, EnmsService s, CancellationToken ct) =>
+        {
+            await s.DeleteEnpiAsync(id, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.EnergyManage);
+        g.MapGet("/objectives", (EnmsService s, CancellationToken ct) => s.ObjectivesAsync(ct)).RequirePermission(Permissions.EnergyRead);
+        g.MapPost("/objectives", async (SaveObjectiveRequest r, EnmsService s, CancellationToken ct) =>
+            Results.Created("/api/v1/enms/objectives", new { objectiveId = await s.SaveObjectiveAsync(null, r, ct) })).RequirePermission(Permissions.EnergyManage);
+        g.MapPut("/objectives/{id:guid}", async (Guid id, SaveObjectiveRequest r, EnmsService s, CancellationToken ct) =>
+        {
+            await s.SaveObjectiveAsync(id, r, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.EnergyManage);
+        g.MapDelete("/objectives/{id:guid}", async (Guid id, EnmsService s, CancellationToken ct) =>
+        {
+            await s.DeleteObjectiveAsync(id, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.EnergyManage);
+        g.MapGet("/actions", (EnmsService s, CancellationToken ct) => s.ActionsAsync(ct)).RequirePermission(Permissions.EnergyRead);
+        g.MapPost("/actions", async (SaveActionRequest r, EnmsService s, CancellationToken ct) =>
+            Results.Created("/api/v1/enms/actions", new { actionId = await s.SaveActionAsync(null, r, ct) })).RequirePermission(Permissions.EnergyManage);
+        g.MapPut("/actions/{id:guid}", async (Guid id, SaveActionRequest r, EnmsService s, CancellationToken ct) =>
+        {
+            await s.SaveActionAsync(id, r, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.EnergyManage);
+        g.MapDelete("/actions/{id:guid}", async (Guid id, EnmsService s, CancellationToken ct) =>
+        {
+            await s.DeleteActionAsync(id, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.EnergyManage);
+        g.MapGet("/documents", (EnmsService s, CancellationToken ct) => s.DocumentsAsync(ct)).RequirePermission(Permissions.EnergyRead);
+        g.MapPost("/documents", async (SaveDocumentRequest r, EnmsService s, CancellationToken ct) =>
+            Results.Created("/api/v1/enms/documents", new { documentId = await s.SaveDocumentAsync(null, r, ct) })).RequirePermission(Permissions.EnergyManage);
+        g.MapPut("/documents/{id:guid}", async (Guid id, SaveDocumentRequest r, EnmsService s, CancellationToken ct) =>
+        {
+            await s.SaveDocumentAsync(id, r, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.EnergyManage);
+        g.MapDelete("/documents/{id:guid}", async (Guid id, EnmsService s, CancellationToken ct) =>
+        {
+            await s.DeleteDocumentAsync(id, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.EnergyManage);
+        g.MapGet("/findings", (EnmsService s, CancellationToken ct) => s.FindingsAsync(ct)).RequirePermission(Permissions.EnergyRead);
+        g.MapPost("/findings", async (SaveFindingRequest r, EnmsService s, CancellationToken ct) =>
+            Results.Created("/api/v1/enms/findings", new { findingId = await s.SaveFindingAsync(null, r, ct) })).RequirePermission(Permissions.EnergyManage);
+        g.MapPut("/findings/{id:guid}", async (Guid id, SaveFindingRequest r, EnmsService s, CancellationToken ct) =>
+        {
+            await s.SaveFindingAsync(id, r, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.EnergyManage);
+        g.MapDelete("/findings/{id:guid}", async (Guid id, EnmsService s, CancellationToken ct) =>
+        {
+            await s.DeleteFindingAsync(id, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.EnergyManage);
     }
 
     private static void MapProduction(RouteGroupBuilder g)

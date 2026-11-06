@@ -105,7 +105,9 @@ public sealed class EnergyTests(FactoryOsApp app)
         var c = await admin.GetFromJsonAsync<JsonElement>($"/api/v1/energy/carbon?{Window}");
         var grid = c.GetProperty("gridKwh").GetDouble();
         Assert.True(grid > 0);
-        Assert.InRange(c.GetProperty("scope2Kg").GetDouble(), grid * 0.474 - 1, grid * 0.474 + 1);   // grid is rounded to 0.1 kWh
+        var factor = c.GetProperty("electricityFactor").GetDouble();   // the published grid factor for this year, from the library
+        Assert.Equal(0.466, factor, 3);
+        Assert.InRange(c.GetProperty("scope2Kg").GetDouble(), grid * factor - 1, grid * factor + 1);   // grid is rounded to 0.1 kWh
         Assert.True(c.GetProperty("scope1Kg").GetDouble() >= 0);
         Assert.True(c.GetProperty("daily").GetArrayLength() >= 1);
         Assert.True(c.GetProperty("byArea").GetArrayLength() >= 2);
