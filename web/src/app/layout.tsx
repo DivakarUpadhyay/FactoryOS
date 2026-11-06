@@ -9,6 +9,7 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 export const metadata: Metadata = {
   title: "Divakar FactoryOS",
   description: "Smart manufacturing platform: plant, energy, power, production, robotics, maintenance and quality in one place.",
+  icons: { icon: "/factory.png", shortcut: "/factory.png", apple: "/factory.png" },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

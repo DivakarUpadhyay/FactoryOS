@@ -1,6 +1,6 @@
 // Shop-floor app service worker: keeps the app shell available on weak Wi-Fi. API calls always go to the network.
-const CACHE = "fos-op-v1";
-const SHELL = ["/op", "/manifest.webmanifest", "/icon.svg"];
+const CACHE = "fos-op-v2";
+const SHELL = ["/op", "/manifest.webmanifest", "/factory.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

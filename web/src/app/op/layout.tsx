@@ -4,7 +4,7 @@ export const metadata: Metadata = {
   title: "FactoryOS shop floor",
   description: "Good and scrap counts, downtime reasons and inspections from the shop floor.",
   manifest: "/manifest.webmanifest",
-  icons: { icon: "/icon.svg", apple: "/icon.svg" },
+  icons: { icon: "/factory.png", apple: "/factory.png" },
   appleWebApp: { capable: true, title: "FactoryOS", statusBarStyle: "default" },
 };
 
