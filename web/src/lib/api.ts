@@ -2,7 +2,9 @@
 // The access token lives in memory only; the refresh token is kept in localStorage so a reload stays signed in.
 // A 401 triggers one refresh attempt, shared by all requests that fail at the same moment.
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5080";
+/** Hosted demo: the site answers the API itself from a recorded snapshot (src/app/api/v1/[...path]/route.ts). */
+export const DEMO = process.env.NEXT_PUBLIC_DEMO === "1";
+export const API_URL = DEMO ? "" : (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5080");
 const REFRESH_KEY = "factoryos.refresh";
 
 export type Me = {

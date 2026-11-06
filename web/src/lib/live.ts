@@ -2,7 +2,7 @@
 // "status" (changed asset states); the connection starts with the first subscriber and stops with the last.
 import { HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from "@microsoft/signalr";
 import { useEffect, useRef, useState } from "react";
-import { API_URL, hubToken } from "./api";
+import { API_URL, DEMO, hubToken } from "./api";
 
 export type LiveValueMsg = { assetId: string; tagId: string; ts: string; value: number | null; quality: number };
 export type LiveStatusMsg = { assetId: string; status: string; lastSeenAt: string | null; lastError: string | null };
@@ -18,7 +18,41 @@ function setState(s: string) {
   stateListeners.forEach((l) => l(s));
 }
 
+// Hosted demo: no hub to connect to, so the feed is simulated from each tag's recorded value (a small wobble for
+// measurements, a slow climb for counters), with the same messages the hub would send.
+let demoTimer: ReturnType<typeof setInterval> | null = null;
+
+function startDemo() {
+  if (demoTimer) return;
+  type Seed = { assetId: string; tagId: string; sensorTypeCode: string; value: number };
+  let seed: Seed[] = [];
+  const counters = new Map<string, number>();
+  let tick = 0;
+  fetch(`${API_URL}/api/v1/demo/live-seed`).then((r) => r.json()).then((s: Seed[]) => (seed = s)).catch(() => undefined);
+  setState("live");
+  demoTimer = setInterval(() => {
+    if (!seed.length) return;
+    const ts = new Date().toISOString();
+    const values: LiveValueMsg[] = seed
+      .filter(() => Math.random() < 0.4)
+      .map((s) => {
+        let value: number;
+        if (/kwh|count|total|hours|runtime/i.test(s.sensorTypeCode)) {
+          value = (counters.get(s.tagId) ?? s.value) + Math.abs(s.value) * 0.00002 + Math.random() * 0.05;
+          counters.set(s.tagId, value);
+        } else value = s.value * (1 + (Math.random() - 0.5) * 0.03);
+        return { assetId: s.assetId, tagId: s.tagId, ts, value: Math.round(value * 1000) / 1000, quality: 0 };
+      });
+    subscribers.forEach((h) => h.values?.(values));
+    if (tick++ % 5 === 0) {
+      const status = [...new Set(seed.map((s) => s.assetId))].map((assetId) => ({ assetId, status: "Running", lastSeenAt: ts, lastError: null }));
+      subscribers.forEach((h) => h.status?.(status));
+    }
+  }, 2000);
+}
+
 function ensure() {
+  if (DEMO) return startDemo();
   if (connection) return;
   connection = new HubConnectionBuilder()
     .withUrl(`${API_URL}/hubs/live`, { accessTokenFactory: hubToken })
@@ -49,12 +83,16 @@ export function useLive(handlers: Handlers): string {
     subscribers.add(proxy);
     stateListeners.add(setLocal);
     ensure();
-    if (connection?.state === HubConnectionState.Connected) setLocal("live");
+    if (connection?.state === HubConnectionState.Connected || demoTimer) setLocal("live");
     return () => {
       subscribers.delete(proxy);
       stateListeners.delete(setLocal);
       // stop a moment later, so moving between pages (or React's double mount in development) keeps one connection
       setTimeout(() => {
+        if (subscribers.size === 0 && demoTimer) {
+          clearInterval(demoTimer);
+          demoTimer = null;
+        }
         if (subscribers.size === 0 && connection) {
           const c = connection;
           connection = null;

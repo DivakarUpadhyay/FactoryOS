@@ -6,6 +6,8 @@ const nextConfig: NextConfig = {
   distDir: process.env.FOS_DIST ?? ".next",
   // A self-contained server (node server.js) for on-premise installs and containers
   output: "standalone",
+  // the hosted demo's recorded API answers, read at run time by src/app/api/v1/[...path]/route.ts
+  outputFileTracingIncludes: { "/api/v1/[...path]": ["./demo-data/**"] },
 };
 
 export default nextConfig;

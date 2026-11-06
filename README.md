@@ -27,6 +27,17 @@ robotics and AGV fleets, maintenance, alarms, quality/SPC and inventory.
 Settings can also come from environment variables prefixed `FACTORYOS_`, e.g. `FACTORYOS_ConnectionStrings__FactoryOS`.
 
 Easiest: double-click `start-factoryos.bat`; it opens the API, the ingestion worker and the web app in three windows.
+
+**Hosted demo.** https://factoryos-alpha.vercel.app runs on Vercel alone, with `NEXT_PUBLIC_DEMO=1` set: the site answers the API
+itself from `web/demo-data/snapshot.json`, a recording of the demo factory as the read-only demo viewer sees it, with timestamps moved
+to the present and a simulated live feed. It needs no backend, so it stays up when this PC is off. Only the demo login works there,
+and changes are switched off. To refresh the snapshot, run the API, the worker and `npm run dev` for a few minutes, then from `web/`:
+`node scripts/record-demo.js demo-data/snapshot.json http://localhost:3000` (needs Playwright and Chrome) and push.
+
+To point the hosted site at the real API instead, remove `NEXT_PUBLIC_DEMO` on Vercel and double-click `start-factoryos-public.bat`:
+it starts the API and the worker, opens a Cloudflare quick tunnel to the API (`winget install Cloudflare.cloudflared`), sets
+`NEXT_PUBLIC_API_URL` on Vercel to the tunnel's new address and rebuilds the site. That works only while those windows stay open.
+
 The **worker** (`src/Divakar.FactoryOS.Worker`) reads every connected asset and stores its readings; without it there is no live data.
 
 ## Tests
