@@ -48,6 +48,7 @@ public static class Migrator
             .SqlDatabase(connectionString)
             .WithScriptsEmbeddedInAssembly(Assembly.GetExecutingAssembly(), name => name.Contains(".Database.Migrations."))
             .WithTransactionPerScript()
+            .WithExecutionTimeout(TimeSpan.FromMinutes(30))   // data migrations (e.g. rolling up years of readings) can be long
             .LogToNowhere()
             .Build()
             .PerformUpgrade();

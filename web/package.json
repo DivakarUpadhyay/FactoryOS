@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@microsoft/signalr": "8.0.7",
+    "@zxing/browser": "0.1.5",
+    "@zxing/library": "0.21.3",
     "lucide-react": "^0.544.0",
     "next": "15.5.28",
     "qrcode": "1.5.4",

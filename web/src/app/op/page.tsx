@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { BrandSplash } from "@/components/progress";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ClipboardCheck, Factory, LayoutDashboard, LogOut, Minus, Plus, TimerOff } from "lucide-react";
@@ -60,7 +61,7 @@ export default function OperatorApp() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  if (loading || !me) return <div className="grid min-h-screen place-items-center text-sm text-muted">Loading…</div>;
+  if (loading || !me) return <BrandSplash label="Shop floor" />;
   const done = (msg: string) => { setToast(msg); setMachine(null); load(); };
 
   return (

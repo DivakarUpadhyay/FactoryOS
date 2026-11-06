@@ -501,7 +501,7 @@ function DataTab({ edit, onError }: TabProps) {
 
   function save() {
     if (!form) return;
-    const body = { source: form.source, periodFrom: form.periodFrom, periodTo: form.periodTo, quantity: Number(form.quantity), unit: form.unit || null, cost: num(form.cost), instrument: form.instrument || null, reference: form.reference || null, note: form.note || null };
+    const body = { source: form.source, periodFrom: form.periodFrom, periodTo: form.periodTo, quantity: form.quantity === "" ? 0 : Number(form.quantity), unit: form.unit || null, cost: num(form.cost), instrument: form.instrument || null, reference: form.reference || null, note: form.note || null };
     run(onError, () => api("/api/v1/enms/entries", { method: "POST", json: body }), () => { setForm(null); load(); });
   }
 
@@ -529,7 +529,7 @@ function DataTab({ edit, onError }: TabProps) {
             <div className="sm:col-span-2"><Field label="Source"><Select value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })}>{SOURCES.map(([s, l]) => <option key={s} value={s}>{l}</option>)}</Select></Field></div>
             <Field label="From"><Input type="date" value={form.periodFrom} onChange={(e) => setForm({ ...form, periodFrom: e.target.value })} /></Field>
             <Field label="To"><Input type="date" value={form.periodTo} onChange={(e) => setForm({ ...form, periodTo: e.target.value })} /></Field>
-            <Field label="Quantity"><Input type="number" step="0.001" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></Field>
+            <Field label="Quantity"><Input type="number" step="0.001" min="0.001" required value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></Field>
             <Field label="Unit" hint="Empty = the factor's unit (L, Nm3, kWh)."><Input value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} /></Field>
             <Field label="Cost"><Input type="number" value={form.cost} onChange={(e) => setForm({ ...form, cost: e.target.value })} /></Field>
             {form.source === "green_power" && <Field label="Instrument"><Select value={form.instrument} onChange={(e) => setForm({ ...form, instrument: e.target.value })}><option value="">—</option><option>T-REC</option><option>PPA</option><option>Self</option></Select></Field>}

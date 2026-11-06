@@ -109,4 +109,12 @@ public sealed class EnmsTests
         var r = EnmsService.Evaluate(weak, [(new DateTime(2026, 11, 1), 1000, 4000)], new DateTime(2026, 11, 1), new DateTime(2026, 11, 2));
         Assert.Contains(r.Notes, n => n.Contains("relevant variable"));
     }
+
+    [Fact]
+    public void A_model_where_energy_falls_with_production_is_flagged()
+    {
+        var odd = Enpi("Regression") with { Slope = -0.1, R2 = 0.95 };
+        var r = EnmsService.Evaluate(odd, [(new DateTime(2026, 11, 1), 1000, 4000)], new DateTime(2026, 11, 1), new DateTime(2026, 11, 2));
+        Assert.Contains(r.Notes, n => n.Contains("energy falls as production rises"));
+    }
 }

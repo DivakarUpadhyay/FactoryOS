@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { SkeletonRows } from "@/components/progress";
 import Link from "next/link";
 import { ArrowDown, ArrowUp, Copy, Maximize2, Minimize2, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api";
@@ -190,7 +191,7 @@ function WidgetView({ w }: { w: Widget }) {
   }
 }
 
-const Unavailable = ({ error }: { error: string | null }) => <p className="text-sm text-muted">{error ?? "Loading…"}</p>;
+const Unavailable = ({ error }: { error: string | null }) => (error ? <p className="text-sm text-muted">{error}</p> : <SkeletonRows rows={3} />);
 
 function StatWidget({ w }: { w: Widget }) {
   const src: Record<string, string> = { oee: "/api/v1/production/oee?{24h}", good: "/api/v1/production/oee?{24h}", kwh: "/api/v1/energy/summary?{24h}", cost: "/api/v1/energy/summary?{24h}",

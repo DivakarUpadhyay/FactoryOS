@@ -102,7 +102,29 @@ export async function hubToken(): Promise<string> {
   return accessToken ?? "";
 }
 
-export async function api<T>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
+/** Requests in flight, for the top progress bar. */
+let busy = 0;
+const busyListeners = new Set<(count: number) => void>();
+
+export function onBusy(fn: (count: number) => void): () => void {
+  busyListeners.add(fn);
+  return () => busyListeners.delete(fn);
+}
+
+function track<T>(work: Promise<T>): Promise<T> {
+  busy++;
+  busyListeners.forEach((fn) => fn(busy));
+  return work.finally(() => {
+    busy--;
+    busyListeners.forEach((fn) => fn(busy));
+  });
+}
+
+export function api<T>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
+  return track(request<T>(path, init));
+}
+
+async function request<T>(path: string, init: RequestInit & { json?: unknown }): Promise<T> {
   const send = () =>
     fetch(`${API_URL}${path}`, {
       ...init,

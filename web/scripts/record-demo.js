@@ -1,4 +1,4 @@
-﻿// Records the FactoryOS demo (every API response the pages ask for) from the live site, signed in as the demo viewer.
+// Records the FactoryOS demo (every API response the pages ask for) from the live site, signed in as the demo viewer.
 // Run it while the site uses the real API (start-factoryos-public.ps1) and the worker has been running for a while.
 // usage (from web/): node scripts/record-demo.js demo-data/snapshot.json [site]
 const { chromium } = require(process.env.PLAYWRIGHT_PATH || "playwright"); // any Playwright install; uses installed Chrome
@@ -40,7 +40,7 @@ let apiHost = null;
   const paths = ["/app", "/app/plant", "/app/floor", "/app/connectivity", "/app/energy", "/app/power", "/app/carbon",
     "/app/production", "/app/robotics", "/app/maintenance", "/app/alarms", "/app/quality", "/app/inventory",
     "/app/reports", "/app/dashboards", "/app/twin", "/app/assistant", "/app/audit", "/app/users", "/app/roles",
-    "/app/security", "/app/settings", "/app/account", "/op"];
+    "/app/security", "/app/settings", "/app/account", "/op", "/app/enms"];
 
   async function visit(p) {
     try {
@@ -60,6 +60,28 @@ let apiHost = null;
   }
 
   for (const p of paths) await visit(p);
+
+  // ISO 50001: every EnPI's results
+  await page.goto(`${SITE}/app/enms`, { waitUntil: "networkidle" }).catch(() => {});
+  await page.locator("button.-mb-px", { hasText: "EnPIs" }).click().catch(() => {});
+  await page.waitForLoadState("networkidle").catch(() => {});
+  const enpiRows = page.locator("tr.cursor-pointer");
+  for (let i = 0; i < await enpiRows.count(); i++) {
+    await enpiRows.nth(i).click().catch(() => {});
+    await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => {});
+  }
+  console.log(`${await enpiRows.count()} EnPIs`);
+
+  // inventory: scan every lot, which records its lookup and traceability
+  const lotList = Object.entries(responses).find(([k]) => k === "GET /api/v1/inventory/lots");
+  const lotNos = lotList ? JSON.parse(lotList[1].body).map((l) => l.lotNo) : [];
+  for (const lotNo of lotNos) {
+    await page.goto(`${SITE}/app/inventory`, { waitUntil: "networkidle" }).catch(() => {});
+    await page.getByLabel("Scan", { exact: true }).fill(lotNo);
+    await page.getByRole("button", { name: "Look up" }).click();
+    await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => {});
+  }
+  console.log(`${lotNos.length} lots traced`);
 
   // every asset's detail page
   const list = Object.entries(responses).find(([k]) => /^GET \/api\/v1\/plant\/floor$/.test(k));

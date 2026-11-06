@@ -76,6 +76,25 @@ public sealed class IngestionStore(Db db, SecretProtector secrets) : IIngestionS
             WHEN MATCHED AND n.Ts >= l.Ts THEN UPDATE SET Ts = n.Ts, Value = n.Value, Quality = n.Quality, UpdatedAt = SYSUTCDATETIME()
             WHEN NOT MATCHED THEN INSERT (TagId, TenantId, Ts, Value, Quality) VALUES (n.TagId, n.TenantId, n.Ts, n.Value, n.Quality);
             """, new { rows = table.AsTableValuedParameter("telemetry.ReadingRows") }, cancellationToken: ct));
+
+        // keep the hourly counter roll-ups current: the hours just written, and the hour after each (its first rise is
+        // measured from the last reading before it, which may be one of these)
+        var now = DateTime.UtcNow;
+        var hours = new DataTable();
+        hours.Columns.Add("TagId", typeof(Guid));
+        hours.Columns.Add("Hour", typeof(DateTime));
+        foreach (var (tag, hour) in rows.Where(r => r.Store)
+                     .Select(r => (r.TagId, Hour: new DateTime(r.Ts.Ticks - r.Ts.Ticks % TimeSpan.TicksPerHour, DateTimeKind.Utc)))
+                     .SelectMany(x => x.Hour.AddHours(1) <= now ? new[] { x, (x.TagId, x.Hour.AddHours(1)) } : new[] { x })
+                     .Distinct())
+        {
+            hours.Rows.Add(tag, hour);
+        }
+        if (hours.Rows.Count > 0)
+        {
+            await con.ExecuteAsync(new CommandDefinition("telemetry.RollupCounterHours", new { hours = hours.AsTableValuedParameter("telemetry.TagHours") },
+                commandType: CommandType.StoredProcedure, commandTimeout: 120, cancellationToken: ct));
+        }
     }
 
     public async Task UpdateHealthAsync(IReadOnlyList<AssetHealth> health, CancellationToken ct)

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { BrandSplash } from "@/components/progress";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 
@@ -12,5 +13,5 @@ export default function Home() {
     if (loading) return;
     router.replace(!me ? "/login" : me.isSuperAdmin ? "/platform" : "/app");
   }, [me, loading, router]);
-  return <div className="grid min-h-screen place-items-center text-sm text-muted">Loading Divakar FactoryOS…</div>;
+  return <BrandSplash />;
 }

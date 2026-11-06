@@ -80,7 +80,9 @@ export function CameraTab({ assetId, canEdit }: { assetId: string; canEdit: bool
             <ErrorNote error={camError} />
             <AuthImage key={stamp} path={`/api/v1/plant/assets/${assetId}/camera/snapshot`} alt="Camera picture" everySec={5} live={live} onError={onCamError} />
           </>
-        ) : <p className="text-sm text-muted">No camera on this machine. Most IP cameras give a still picture at a snapshot address. Add it on the right to see the machine here and to keep a picture with every alarm.</p>}
+        ) : <p className="text-sm text-muted">{canEdit
+          ? "No camera on this machine. Most IP cameras give a still picture at a snapshot address. Add it under Camera settings to see the machine here and to keep a picture with every alarm."
+          : "No camera is connected to this machine yet. A factory admin can connect its IP camera; the picture then shows here and is kept with every alarm."}</p>}
       </Card>
       {canEdit && (
         <Card title="Camera settings">

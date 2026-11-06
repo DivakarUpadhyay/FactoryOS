@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { SkeletonRows } from "@/components/progress";
 import Link from "next/link";
 import { Check, ListTree, Play, Plus, X } from "lucide-react";
 import { BomRoutingEditor, WorkOrderDetail } from "@/components/planning";
@@ -349,7 +350,7 @@ function ShiftsTab() {
       <ErrorNote error={error} />
       <div className="mb-4 flex items-center justify-end gap-2 text-sm"><span className="text-muted">Day</span>
         <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-44 py-1" /></div>
-      {!rows ? <p className="text-sm text-muted">Loading…</p> : (
+      {!rows ? <SkeletonRows /> : (
         <div className="grid gap-4 lg:grid-cols-2">
           {rows.map((s) => (
             <Card key={s.shift} title={`${s.shift} shift · ${s.from.slice(11, 16)}–${s.to.slice(11, 16)}`}>

@@ -50,11 +50,11 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
 
 export function Card({ title, actions, children, className }: { title?: React.ReactNode; actions?: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (
-    <section className={cx("rounded-xl border border-line bg-panel", className)}>
+    <section className={cx("min-w-0 rounded-xl border border-line bg-panel", className)}>
       {(title || actions) && (
-        <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
-          <h2 className="text-sm font-semibold">{title}</h2>
-          <div className="flex items-center gap-2">{actions}</div>
+        <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-line px-4 py-3">
+          <h2 className="min-w-0 text-sm font-semibold">{title}</h2>
+          <div className="flex flex-wrap items-center gap-2">{actions}</div>
         </header>
       )}
       <div className="p-4">{children}</div>
@@ -149,7 +149,7 @@ export function PageHeader({ title, sub, actions }: { title: string; sub?: strin
         <h1 className="text-xl font-semibold">{title}</h1>
         {sub && <p className="mt-1 text-sm text-muted">{sub}</p>}
       </div>
-      <div className="flex gap-2">{actions}</div>
+      <div className="flex flex-wrap gap-2">{actions}</div>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import Link from "next/link";
 import QRCode from "qrcode";
 import { ArrowDownToLine, ArrowUpFromLine, Factory, GitBranch, Plus, Printer, ScanLine, SlidersHorizontal } from "lucide-react";
 import { api } from "@/lib/api";
+import { CameraScan } from "@/components/scanner";
 import { useAuth } from "@/lib/auth";
 import { Badge, Button, Card, ErrorNote, Field, Input, Modal, PageHeader, Select, Stat, Table, cx, errorText } from "@/components/ui";
 
@@ -50,11 +51,15 @@ export default function InventoryPage() {
     api<Product[]>("/api/v1/production/products").then(setProducts).catch(() => undefined);
   }, [load]);
 
+  const onCameraCode = useCallback((code: string) => { setScan(code); void lookUpRef.current(code); }, []);
   async function doScan(e: React.FormEvent) {
     e.preventDefault();
-    if (!scan.trim()) return;
+    await lookUp(scan);
+  }
+  async function lookUp(code: string) {
+    if (!code.trim()) return;
     try {
-      const r = await api<{ kind: string; item: Item | null; lot: Lot | null }>(`/api/v1/inventory/lookup?code=${encodeURIComponent(scan.trim())}`);
+      const r = await api<{ kind: string; item: Item | null; lot: Lot | null }>(`/api/v1/inventory/lookup?code=${encodeURIComponent(code.trim())}`);
       setError(null);
       if (r.kind === "lot" && r.lot) {
         setNotice(`Lot ${r.lot.lotNo}: ${r.lot.itemName}, ${qty(r.lot.onHand)} on hand (${r.lot.status}).`);
@@ -70,6 +75,8 @@ export default function InventoryPage() {
       setError(errorText(err));
     }
   }
+  const lookUpRef = useRef(lookUp);
+  useEffect(() => { lookUpRef.current = lookUp; });
   async function runTrace(lotNo: string) {
     try {
       setTrace(await api<Trace>(`/api/v1/trace?lot=${encodeURIComponent(lotNo)}`));
@@ -134,8 +141,9 @@ export default function InventoryPage() {
       <form onSubmit={doScan} className="mb-6 flex gap-2">
         <div className="relative flex-1">
           <ScanLine size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-          <Input value={scan} onChange={(e) => setScan(e.target.value)} placeholder="Scan or type a barcode, item code or lot number" className="pl-9" aria-label="Scan" />
+          <Input autoFocus value={scan} onChange={(e) => setScan(e.target.value)} placeholder="Scan or type a barcode, item code or lot number" className="pl-9" aria-label="Scan" />
         </div>
+        <CameraScan onCode={onCameraCode} />
         <Button type="submit">Look up</Button>
       </form>
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

@@ -8,28 +8,75 @@ namespace Divakar.FactoryOS.Infrastructure.Repositories;
 
 public sealed class EnergyRepository(Db db) : IEnergyRepository
 {
+    private sealed record TagMeta(Guid AssetId, string AssetCode, string AssetName, string AssetTypeCode, string Category, string NodeLevel,
+        Guid TagId, string SensorTypeCode);
+
+    private sealed record HourRise(Guid TagId, DateTime Hour, double Rise);
+
+    private static DateTime FloorHour(DateTime t) => new(t.Ticks - t.Ticks % TimeSpan.TicksPerHour, DateTimeKind.Utc);
+
+    private static DateTime CeilHour(DateTime t) => t.Ticks % TimeSpan.TicksPerHour == 0 ? t : FloorHour(t).AddHours(1);
+
+    /// <summary>
+    /// How much each counter rose in each UTC hour of [from, to): whole hours from the roll-ups (telemetry.CounterHours),
+    /// the partial hours at either end from the raw readings. A rise is the sum of increases between readings, so a counter
+    /// that drops (replaced, reset, rolled over, gateway restarted) adds nothing.
+    /// </summary>
+    private static async Task<List<HourRise>> HourlyRisesAsync(System.Data.Common.DbConnection con, Guid tenantId, IReadOnlyCollection<Guid> tagIds,
+        DateTime from, DateTime to, CancellationToken ct)
+    {
+        var result = new List<HourRise>();
+        if (tagIds.Count == 0 || from >= to)
+        {
+            return result;
+        }
+        var fullFrom = CeilHour(from);
+        var fullTo = FloorHour(to);
+        if (fullFrom < fullTo)
+        {
+            result.AddRange(await con.QueryAsync<HourRise>(new CommandDefinition("""
+                SELECT TagId, Hour, Rise FROM telemetry.CounterHours
+                WHERE TenantId = @tenantId AND TagId IN @tagIds AND Hour >= @fullFrom AND Hour < @fullTo
+                """, new { tenantId, tagIds, fullFrom, fullTo }, commandTimeout: 120, cancellationToken: ct)));
+        }
+        // raw edges: [from, fullFrom) counts only rises inside the window; [fullTo, to) continues from the last reading before it
+        var edges = fullFrom < fullTo
+            ? new[] { (From: from, To: fullFrom, Lead: false), (From: fullTo, To: to, Lead: true) }
+            : [(From: from, To: to, Lead: false)];
+        foreach (var e in edges.Where(e => e.From < e.To))
+        {
+            result.AddRange(await con.QueryAsync<HourRise>(new CommandDefinition("""
+                WITH steps AS (
+                    SELECT r.TagId, r.Ts, r.Value - LAG(r.Value) OVER (PARTITION BY r.TagId ORDER BY r.Ts) AS Step
+                    FROM telemetry.Readings r
+                    WHERE r.TenantId = @tenantId AND r.TagId IN @tagIds AND r.Ts >= @start AND r.Ts < @to AND r.Value IS NOT NULL AND r.Quality <= 1)
+                SELECT TagId, CAST(DATEADD(HOUR, DATEDIFF(HOUR, CAST('2000-01-01' AS datetime2(0)), Ts), CAST('2000-01-01' AS datetime2(0))) AS datetime2(0)) AS Hour,
+                       SUM(CASE WHEN Step > 0 THEN Step ELSE 0 END) AS Rise
+                FROM steps
+                WHERE Ts >= @from
+                GROUP BY TagId, CAST(DATEADD(HOUR, DATEDIFF(HOUR, CAST('2000-01-01' AS datetime2(0)), Ts), CAST('2000-01-01' AS datetime2(0))) AS datetime2(0))
+                """, new { tenantId, tagIds, start = e.Lead ? e.From.AddHours(-1) : e.From, from = e.From, to = e.To }, commandTimeout: 120, cancellationToken: ct)));
+        }
+        return result;
+    }
+
     public async Task<IReadOnlyList<CounterDelta>> CounterDeltasAsync(Guid tenantId, IReadOnlyCollection<string> sensorTypes, DateTime from, DateTime to,
         CancellationToken ct)
     {
         await using var con = await db.OpenAsync(ct);
-        // A counter's use is the sum of its rises between readings: a drop (meter replaced, reset or rolled over, gateway
-        // restarted) adds nothing instead of turning the whole range into consumption.
-        return [.. await con.QueryAsync<CounterDelta>(new CommandDefinition("""
-            WITH steps AS (
-                SELECT r.TagId, r.Value - LAG(r.Value) OVER (PARTITION BY r.TagId ORDER BY r.Ts) AS Step
-                FROM telemetry.Readings r
-                WHERE r.TenantId = @tenantId AND r.Ts >= @from AND r.Ts < @to AND r.Quality <= 1 AND r.Value IS NOT NULL
-                  AND r.TagId IN (SELECT TagId FROM plant.Tags WHERE TenantId = @tenantId AND SensorTypeCode IN @sensorTypes))
-            SELECT a.AssetId, a.Code AS AssetCode, a.Name AS AssetName, a.AssetTypeCode, at.Category, n.Level AS NodeLevel,
-                   t.TagId, t.SensorTypeCode, CAST(ISNULL(SUM(CASE WHEN s.Step > 0 THEN s.Step ELSE 0 END), 0) AS float) AS Delta
+        var tags = (await con.QueryAsync<TagMeta>(new CommandDefinition("""
+            SELECT a.AssetId, a.Code AS AssetCode, a.Name AS AssetName, a.AssetTypeCode, at.Category, n.Level AS NodeLevel, t.TagId, t.SensorTypeCode
             FROM plant.Tags t
             JOIN plant.Assets a ON a.AssetId = t.AssetId
             JOIN plant.AssetTypes at ON at.AssetTypeCode = a.AssetTypeCode
             JOIN plant.Nodes n ON n.NodeId = a.NodeId
-            JOIN steps s ON s.TagId = t.TagId
             WHERE t.TenantId = @tenantId AND t.SensorTypeCode IN @sensorTypes AND t.IsActive = 1 AND a.IsActive = 1
-            GROUP BY a.AssetId, a.Code, a.Name, a.AssetTypeCode, at.Category, n.Level, t.TagId, t.SensorTypeCode
-            """, new { tenantId, sensorTypes, from, to }, commandTimeout: 120, cancellationToken: ct))];
+            """, new { tenantId, sensorTypes }, cancellationToken: ct))).ToList();
+        var rises = (await HourlyRisesAsync(con, tenantId, [.. tags.Select(t => t.TagId)], from, to, ct))
+            .GroupBy(r => r.TagId).ToDictionary(g => g.Key, g => g.Sum(r => r.Rise));
+        // only counters that reported in the period, as before
+        return [.. tags.Where(t => rises.ContainsKey(t.TagId)).Select(t => new CounterDelta(t.AssetId, t.AssetCode, t.AssetName, t.AssetTypeCode,
+            t.Category, t.NodeLevel, t.TagId, t.SensorTypeCode, rises[t.TagId]))];
     }
 
     public async Task<IReadOnlyList<CounterBucket>> CounterBucketsAsync(Guid tenantId, IReadOnlyCollection<Guid> tagIds, DateTime from, DateTime to,
@@ -40,8 +87,26 @@ public sealed class EnergyRepository(Db db) : IEnergyRepository
             return [];
         }
         await using var con = await db.OpenAsync(ct);
-        // Buckets of the counter's running total of rises (see CounterDeltasAsync), which only goes up, so a reset inside a
-        // bucket cannot inflate it.
+        if (bucketMinutes % 60 == 0 && utcOffsetMinutes % 60 == 0)
+        {
+            // hourly rises grouped into local buckets; each bucket reports the running total before (min) and after (max) it,
+            // which is what Consumption() turns back into use per bucket
+            var epoch = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            var buckets = new List<CounterBucket>();
+            foreach (var tag in (await HourlyRisesAsync(con, tenantId, tagIds, from, to, ct)).GroupBy(r => r.TagId))
+            {
+                double total = 0;
+                foreach (var b in tag.GroupBy(r => epoch.AddMinutes(Math.Floor((r.Hour.AddMinutes(utcOffsetMinutes) - epoch).TotalMinutes / bucketMinutes) * bucketMinutes))
+                             .OrderBy(g => g.Key))
+                {
+                    var before = total;
+                    total += b.Sum(r => r.Rise);
+                    buckets.Add(new CounterBucket(tag.Key, DateTime.SpecifyKind(b.Key, DateTimeKind.Unspecified), total, before));
+                }
+            }
+            return buckets;
+        }
+        // time zones off the whole hour: buckets of the running total of rises, straight from the readings
         return [.. await con.QueryAsync<CounterBucket>(new CommandDefinition("""
             WITH steps AS (
                 SELECT r.TagId, r.Ts, r.Value - LAG(r.Value) OVER (PARTITION BY r.TagId ORDER BY r.Ts) AS Step

@@ -65,8 +65,8 @@ This policy is communicated to all employees and contractors and reviewed every 
     operatingCriteria: "Chilled water 7 °C supply; SMT hall 23 ± 2 °C, machining hall 26 ± 2 °C; AHUs on schedule.", owner: "Facilities lead",
   });
 
-  const site = await call("POST", "/api/v1/enms/enpis", { name: "Site electricity vs parts made", kind: "Regression", baselineFrom: "2026-10-17", baselineTo: "2026-10-31" });
-  const cnc = await call("POST", "/api/v1/enms/enpis", { name: "CNC kWh per part", seuId: seuCnc, kind: "Ratio", baselineFrom: "2026-10-17", baselineTo: "2026-10-31" });
+  const site = await call("POST", "/api/v1/enms/enpis", { name: "Site electricity per part", kind: "Ratio", baselineFrom: "2026-10-24", baselineTo: "2026-10-31" });
+  const cnc = await call("POST", "/api/v1/enms/enpis", { name: "CNC electricity vs parts made", seuId: seuCnc, kind: "Regression", baselineFrom: "2026-10-24", baselineTo: "2026-10-31" });
   const o1 = (await call("POST", "/api/v1/enms/objectives", { title: "Reduce site electricity per unit of production by 5 %", enpiId: site.enpiId, targetPct: 5, targetDate: "2027-06-30", owner: "Energy manager" })).objectiveId;
   const o2 = (await call("POST", "/api/v1/enms/objectives", { title: "Cut CNC energy per part by 8 %", enpiId: cnc.enpiId, targetPct: 8, targetDate: "2027-12-31", owner: "Maintenance lead" })).objectiveId;
 

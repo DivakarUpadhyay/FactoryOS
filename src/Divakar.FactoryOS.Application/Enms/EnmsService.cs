@@ -111,9 +111,13 @@ public sealed class EnmsService(IEnmsRepository repo, IEnergyRepository energy, 
         {
             throw AppException.Validation("Source is a fuel, electricity, steam or green_power.");
         }
-        if (r.PeriodFrom.Date > r.PeriodTo.Date || r.Quantity < 0)
+        if (r.Quantity <= 0)
         {
-            throw AppException.Validation("The period must start on or before its end, and the quantity cannot be negative.");
+            throw AppException.Validation("Give the quantity delivered or billed (more than zero).");
+        }
+        if (r.PeriodFrom.Date > r.PeriodTo.Date)
+        {
+            throw AppException.Validation("The period must start on or before its end.");
         }
         if (r.Source == "green_power" && r.Instrument is not ("T-REC" or "PPA" or "Self"))
         {
@@ -303,6 +307,11 @@ public sealed class EnmsService(IEnmsRepository repo, IEnergyRepository energy, 
         {
             notes.Add($"The baseline model explains {e.R2:P0} of the daily variation (below {MinR2:P0}). Look for another relevant variable "
                 + "(shift hours, outdoor temperature, product mix) before relying on the savings figure.");
+        }
+        if (e.Kind == "Regression" && e.Slope < 0)
+        {
+            notes.Add("In this baseline model energy falls as production rises, which rarely makes engineering sense. Check the meters "
+                + "and part counters in the baseline period, or pick another period, before using it (ISO 50006 asks for a model that fits the process).");
         }
         if (e.Kind == "Measured")
         {

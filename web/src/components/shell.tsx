@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { AlarmBell } from "./alarm-bell";
+import { ShellSkeleton, TopProgress } from "./progress";
 import { LogoMark } from "./logo";
 import { cx } from "./ui";
 
@@ -95,13 +96,14 @@ export function Shell({ nav, area, children }: { nav: NavItem[]; area: "platform
   }, [me, loading, area, router]);
 
   if (loading || !me) {
-    return <div className="grid min-h-screen place-items-center text-sm text-muted">Loading Divakar FactoryOS…</div>;
+    return <><TopProgress /><ShellSkeleton /></>;
   }
 
   const items = nav.filter((i) => (!i.permission || can(i.permission)) && (!i.module || hasModule(i.module)));
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[256px_1fr]">
+      <TopProgress />
       <aside
         className={cx(
           "fixed inset-y-0 left-0 z-40 w-64 border-r border-line bg-panel transition-transform lg:static lg:translate-x-0",
@@ -115,7 +117,7 @@ export function Shell({ nav, area, children }: { nav: NavItem[]; area: "platform
             <div className="text-xs text-muted">{area === "platform" ? "Platform console" : me.tenantName}</div>
           </div>
         </div>
-        <nav className="space-y-0.5 overflow-y-auto p-2" style={{ maxHeight: "calc(100vh - 7.5rem)" }}>
+        <nav className="scroll-quiet space-y-0.5 overflow-y-auto overscroll-contain p-2" style={{ maxHeight: "calc(100dvh - 7.5rem)" }}>
           {items.map((i) => {
             const active = i.href === path || (i.href !== "/app" && i.href !== "/platform" && path.startsWith(i.href));
             const Icon = i.icon;
@@ -169,7 +171,7 @@ export function Shell({ nav, area, children }: { nav: NavItem[]; area: "platform
             <LogOut size={16} /> Sign out
           </button>
         </header>
-        <main className="mx-auto max-w-7xl p-4 md:p-6">{children}</main>
+        <main key={path} className="page-enter mx-auto max-w-7xl p-4 md:p-6">{children}</main>
       </div>
     </div>
   );

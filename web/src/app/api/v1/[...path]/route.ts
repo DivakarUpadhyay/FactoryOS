@@ -63,6 +63,18 @@ function liveSeed() {
   return Response.json(seed);
 }
 
+/** Barcode / code / lot lookup answered from the recorded stock, with the same rules as the API (item barcode or code, then lot). */
+function lookup(code: string) {
+  const c = code.trim().toLowerCase();
+  const body = (key: string) => { const r = byPath!.get(key); return r?.body ? JSON.parse(r.body) : []; };
+  const items = body("GET /api/v1/inventory/items") as { code: string; barcode: string | null }[];
+  const item = items.find((i) => i.barcode?.toLowerCase() === c || i.code.toLowerCase() === c);
+  if (item) return Response.json({ kind: "item", item, lot: null });
+  const lot = (body("GET /api/v1/inventory/lots") as { lotNo: string }[]).find((l) => l.lotNo.toLowerCase() === c);
+  if (lot) return Response.json({ kind: "lot", item: null, lot });
+  return problem(404, `An item or lot with the code '${code.trim()}' was not found.`);
+}
+
 async function handle(req: Request, { params }: { params: Promise<{ path: string[] }> }) {
   if (!ENABLED) return problem(404, "Not found");
   load();
@@ -80,6 +92,7 @@ async function handle(req: Request, { params }: { params: Promise<{ path: string
   if (method === "POST" && route === "/api/v1/auth/refresh") return reply(byPath!.get(`POST ${route}`)!);
   if (method === "POST" && route === "/api/v1/auth/logout") return new Response(null, { status: 204 });
   if (method !== "GET") return problem(403, "This is a read-only demo, so changes are switched off.");
+  if (route === "/api/v1/inventory/lookup") return lookup(url.searchParams.get("code") ?? "");
 
   const rec = byKey!.get(normalise(`GET ${route}${url.search}`)) ?? byPath!.get(`GET ${route}`);
   return rec ? reply(rec) : problem(404, "This view is not part of the online demo.");

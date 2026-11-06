@@ -14,7 +14,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth">
+      <head>
+        {/* apply the saved theme before the first paint, so a refresh never flashes the wrong colours */}
+        <script dangerouslySetInnerHTML={{ __html: "try{var t=localStorage.getItem('factoryos.theme');if(t)document.documentElement.dataset.theme=t}catch(e){}" }} />
+      </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <AuthProvider>{children}</AuthProvider>
       </body>

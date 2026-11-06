@@ -218,7 +218,7 @@ public sealed class InventoryService(IInventoryRepository repo, ModuleGate gate,
             return new LookupResult("item", item, null);
         }
         var lot = (await repo.LotsAsync(tenantId, null, c, null, ct)).FirstOrDefault();
-        return lot is not null ? new LookupResult("lot", null, lot) : throw AppException.NotFound($"Nothing with the code '{c}'");
+        return lot is not null ? new LookupResult("lot", null, lot) : throw AppException.NotFound($"An item or lot with the code '{c}'");
     }
 
     /// <summary>
