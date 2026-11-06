@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ClipboardCheck, Factory, LogOut, Minus, Plus, TimerOff } from "lucide-react";
+import { ChevronLeft, ClipboardCheck, Factory, LayoutDashboard, LogOut, Minus, Plus, TimerOff } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Button, ErrorNote, cx, errorText } from "@/components/ui";
@@ -70,6 +71,7 @@ export default function OperatorApp() {
           <div className="truncate font-semibold">{machine ? machine.name : "Shop floor"}</div>
           <div className="truncate text-xs opacity-80">{me.displayName} · {me.tenantName}</div>
         </div>
+        <Link href="/app" aria-label="Back to the main app" title="Back to the main app" className="flex items-center gap-1 rounded px-2 py-1 text-sm hover:bg-white/10"><LayoutDashboard size={18} /><span>Main app</span></Link>
         <button aria-label="Sign out" onClick={() => logout().then(() => router.replace("/login?next=/op"))} className="rounded p-1"><LogOut size={18} /></button>
       </header>
       <main className="flex-1 space-y-3 p-3">
