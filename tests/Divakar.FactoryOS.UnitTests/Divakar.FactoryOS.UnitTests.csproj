@@ -24,6 +24,7 @@
     <ProjectReference Include="..\..\src\Divakar.FactoryOS.Application\Divakar.FactoryOS.Application.csproj" />
     <ProjectReference Include="..\..\src\Divakar.FactoryOS.Connectors\Divakar.FactoryOS.Connectors.csproj" />
     <ProjectReference Include="..\..\src\Divakar.FactoryOS.Infrastructure\Divakar.FactoryOS.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Divakar.FactoryOS.Edge\Divakar.FactoryOS.Edge.csproj" />
   </ItemGroup>
 
 </Project>

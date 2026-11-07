@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import {
   Activity, AlertTriangle, Bot, Box, Boxes, Building2, Cable, ClipboardCheck, CreditCard, Factory, FileBarChart, Gauge, LayoutDashboard, LayoutGrid, Leaf,
   LogOut, Map as MapIcon, Menu, Receipt, ScrollText, Settings2, ShieldCheck, Sparkles, SunMoon, Users, Wrench, Zap,
-  Smartphone, BadgeCheck,
+  Smartphone, BadgeCheck, BrainCircuit,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { AlarmBell } from "./alarm-bell";
@@ -42,6 +42,7 @@ export const appNav: NavItem[] = [
   { href: "/app/robotics", label: "Robotics & AGV", icon: Bot, permission: "robotics.read", module: "robotics" },
   { href: "/app/maintenance", label: "Maintenance", icon: Wrench, permission: "maintenance.read", module: "maintenance" },
   { href: "/app/alarms", label: "Alarms", icon: AlertTriangle, permission: "alarms.read", module: "alarms" },
+  { href: "/app/ai", label: "OT AI insights", icon: BrainCircuit, permission: "alarms.read", module: "alarms" },
   { href: "/app/quality", label: "Quality / SPC", icon: ClipboardCheck, permission: "quality.read", module: "quality" },
   { href: "/app/inventory", label: "Inventory", icon: Boxes, permission: "production.read", module: "inventory" },
   { href: "/app/reports", label: "Reports", icon: FileBarChart, permission: "reports.read" },

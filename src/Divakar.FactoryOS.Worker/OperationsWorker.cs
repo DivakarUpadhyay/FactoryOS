@@ -21,6 +21,7 @@ public sealed class OperationsWorker(IServiceScopeFactory scopes, ILogger<Operat
         ("fleet dispatch", TimeSpan.FromSeconds(2), (sp, ct) => sp.GetRequiredService<FleetDispatcher>().RunOnceAsync(DateTime.UtcNow, ct)),
         ("alarm rules", TimeSpan.FromSeconds(5), (sp, ct) => sp.GetRequiredService<AlarmEngine>().RunOnceAsync(DateTime.UtcNow, ct)),
         ("anomaly detection", TimeSpan.FromSeconds(60), (sp, ct) => sp.GetRequiredService<AnomalyDetector>().RunOnceAsync(DateTime.UtcNow, ct)),
+        ("ot ai detectors", TimeSpan.FromMinutes(5), (sp, ct) => sp.GetRequiredService<Divakar.FactoryOS.Application.Ai.OtAiJob>().RunOnceAsync(DateTime.UtcNow, ct)),
         ("preventive maintenance", TimeSpan.FromSeconds(60), (sp, ct) => sp.GetRequiredService<PmScheduler>().RunOnceAsync(DateTime.UtcNow, ct)),
         ("load shedding", TimeSpan.FromSeconds(10), (sp, ct) => sp.GetRequiredService<Divakar.FactoryOS.Application.Energy.LoadShedEngine>().RunOnceAsync(DateTime.UtcNow, ct)),
         ("notifications", TimeSpan.FromSeconds(5), (sp, ct) => sp.GetRequiredService<NotificationSender>().RunOnceAsync(ct)),

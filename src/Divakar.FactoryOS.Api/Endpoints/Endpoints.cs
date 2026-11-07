@@ -1,6 +1,7 @@
 using System.Net;
 using Divakar.FactoryOS.Api.Security;
 using Divakar.FactoryOS.Application.Abstractions;
+using Divakar.FactoryOS.Application.Ai;
 using Divakar.FactoryOS.Application.Alarms;
 using Divakar.FactoryOS.Application.Assistant;
 using Divakar.FactoryOS.Application.Platform;
@@ -44,6 +45,8 @@ public static class Endpoints
         MapProduction(api.MapGroup("/production").WithTags("Production"));
         MapRobotics(api.MapGroup("/robotics").WithTags("Robotics"));
         MapAlarms(api.MapGroup("/alarms").WithTags("Alarms"));
+        MapAi(api.MapGroup("/ai").WithTags("OT AI"));
+        MapEdge(api.MapGroup("/edge").WithTags("Edge agents"));
         api.MapGet("/alarms/{alarmId:long}/snapshot", async (long alarmId, CameraService s, CancellationToken ct) =>
         {
             var img = await s.AlarmSnapshotAsync(alarmId, ct);
@@ -262,6 +265,63 @@ public static class Endpoints
         g.MapGet("/load-shed/events", (EnergyPlanningService s, CancellationToken ct) => s.EventsAsync(ct)).RequirePermission(Permissions.EnergyRead);
         g.MapGet("/carbon", (DateTime? from, DateTime? to, EnergyService s, CancellationToken ct) => s.CarbonAsync(from, to, ct))
             .RequirePermission(Permissions.EnergyRead);
+        g.MapGet("/carbon/footprint", (DateTime? from, DateTime? to, EnergyService s, CancellationToken ct) => s.FootprintAsync(from, to, ct))
+            .RequirePermission(Permissions.EnergyRead);
+    }
+
+    /// <summary>OT detectors' findings; anyone who sees alarms sees them, feedback needs alarms.acknowledge.</summary>
+    private static void MapAi(RouteGroupBuilder g)
+    {
+        g.MapGet("/insights", (bool? all, OtAiService s, CancellationToken ct) => s.SummaryAsync(all != true, ct)).RequirePermission(Permissions.AlarmsRead);
+        g.MapPost("/insights/{id:long}/feedback", async (long id, FeedbackRequest r, OtAiService s, CancellationToken ct) =>
+        {
+            await s.FeedbackAsync(id, r, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.AlarmsAcknowledge);
+        g.MapPost("/insights/{id:long}/close", async (long id, OtAiService s, CancellationToken ct) =>
+        {
+            await s.CloseAsync(id, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.AlarmsAcknowledge);
+        g.MapPost("/run", async (OtAiService s, CancellationToken ct) => Results.Ok(new { changes = await s.RunNowAsync(ct) }))
+            .RequirePermission(Permissions.AlarmsManage);
+    }
+
+    /// <summary>Edge agents: anyone who sees the plant sees them, changes need connectivity.manage; the agent itself calls with its X-Edge-Key.</summary>
+    private static void MapEdge(RouteGroupBuilder g)
+    {
+        g.MapGet("/agents", (EdgeService s, CancellationToken ct) => s.AgentsAsync(ct)).RequirePermission(Permissions.PlantRead);
+        g.MapPost("/agents", async (SaveEdgeAgentRequest r, EdgeService s, CancellationToken ct) =>
+            Results.Created("/api/v1/edge/agents", await s.CreateAsync(r, ct))).RequirePermission(Permissions.ConnectivityManage);
+        g.MapPost("/agents/{id:guid}/rotate-key", (Guid id, EdgeService s, CancellationToken ct) => s.RotateKeyAsync(id, ct))
+            .RequirePermission(Permissions.ConnectivityManage);
+        g.MapPut("/agents/{id:guid}/assets", async (Guid id, EdgeAssetsRequest r, EdgeService s, CancellationToken ct) =>
+        {
+            await s.SetAssetsAsync(id, r, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.ConnectivityManage);
+        g.MapPut("/agents/{id:guid}/active", async (Guid id, bool active, EdgeService s, CancellationToken ct) =>
+        {
+            await s.SetActiveAsync(id, active, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.ConnectivityManage);
+        g.MapDelete("/agents/{id:guid}", async (Guid id, EdgeService s, CancellationToken ct) =>
+        {
+            await s.DeleteAsync(id, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.ConnectivityManage);
+
+        static string? Key(HttpRequest http) => http.Headers["X-Edge-Key"].FirstOrDefault();
+        g.MapGet("/config", (HttpRequest http, EdgeService s, CancellationToken ct) => s.ConfigAsync(Key(http), ct)).RequireRateLimiting(IngestRateLimit);
+        g.MapPost("/upload", (HttpRequest http, EdgeUpload r, EdgeService s, CancellationToken ct) => s.UploadAsync(Key(http), r, ct))
+            .RequireRateLimiting(IngestRateLimit);
+        g.MapPost("/heartbeat", async (HttpRequest http, EdgeHeartbeat r, EdgeService s, CancellationToken ct) =>
+        {
+            await s.HeartbeatAsync(Key(http), r, ct);
+            return Results.NoContent();
+        }).RequireRateLimiting(IngestRateLimit);
+        g.MapPost("/insights", async (HttpRequest http, IReadOnlyList<EdgeInsight> r, EdgeService s, CancellationToken ct) =>
+            Results.Ok(new { added = await s.InsightsAsync(Key(http), r, ct) })).RequireRateLimiting(IngestRateLimit);
     }
 
     /// <summary>ISO 50001 energy management system. Anyone who can see energy can read it; changes need energy.manage.</summary>
@@ -347,6 +407,60 @@ public static class Endpoints
             await s.DeleteDocumentAsync(id, ct);
             return Results.NoContent();
         }).RequirePermission(Permissions.EnergyManage);
+        g.MapPost("/factors/region", async (RegionRequest r, EnmsService s, CancellationToken ct) =>
+            Results.Ok(new { region = await s.UseGridRegionAsync(r.Region, ct) })).RequirePermission(Permissions.EnergyManage);
+        g.MapGet("/activities", (EnmsService s, CancellationToken ct) => s.ActivitiesAsync(ct)).RequirePermission(Permissions.EnergyRead);
+        g.MapPost("/activities", async (SaveActivityRequest r, EnmsService s, CancellationToken ct) =>
+            Results.Created("/api/v1/enms/activities", new { activityId = await s.AddActivityAsync(r, ct) })).RequirePermission(Permissions.EnergyManage);
+        g.MapDelete("/activities/{id:guid}", async (Guid id, EnmsService s, CancellationToken ct) =>
+        {
+            await s.DeleteActivityAsync(id, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.EnergyManage);
+        g.MapPut("/items/{id:guid}/co2e", async (Guid id, ItemFactorRequest r, EnmsService s, CancellationToken ct) =>
+        {
+            await s.SetItemFactorAsync(id, r.KgCo2ePerUnit, r.Source, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.EnergyManage);
+        g.MapPut("/products/{id:guid}/mass", async (Guid id, ProductMassRequest r, EnmsService s, CancellationToken ct) =>
+        {
+            await s.SetProductMassAsync(id, r.MassKg, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.EnergyManage);
+        g.MapGet("/meters", (EnmsService s, CancellationToken ct) => s.MetersAsync(ct)).RequirePermission(Permissions.EnergyRead);
+        g.MapPost("/meters", async (SaveMeterRequest r, EnmsService s, CancellationToken ct) =>
+            Results.Created("/api/v1/enms/meters", new { meterId = await s.SaveMeterAsync(null, r, ct) })).RequirePermission(Permissions.EnergyManage);
+        g.MapPost("/meters/register-connected", async (EnmsService s, CancellationToken ct) =>
+            Results.Ok(new { added = await s.RegisterConnectedMetersAsync(ct) })).RequirePermission(Permissions.EnergyManage);
+        g.MapPut("/meters/{id:guid}", async (Guid id, SaveMeterRequest r, EnmsService s, CancellationToken ct) =>
+        {
+            await s.SaveMeterAsync(id, r, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.EnergyManage);
+        g.MapDelete("/meters/{id:guid}", async (Guid id, EnmsService s, CancellationToken ct) =>
+        {
+            await s.DeleteMeterAsync(id, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.EnergyManage);
+        g.MapGet("/meters/{id:guid}/calibrations", (Guid id, EnmsService s, CancellationToken ct) => s.CalibrationsAsync(id, ct)).RequirePermission(Permissions.EnergyRead);
+        g.MapPost("/meters/{id:guid}/calibrations", async (Guid id, SaveCalibrationRequest r, EnmsService s, CancellationToken ct) =>
+            Results.Created($"/api/v1/enms/meters/{id}/calibrations", new { calibrationId = await s.AddCalibrationAsync(id, r, ct) }))
+            .RequirePermission(Permissions.EnergyManage);
+        g.MapGet("/mv", (EnmsService s, CancellationToken ct) => s.MvPlansAsync(ct)).RequirePermission(Permissions.EnergyRead);
+        g.MapPost("/mv", async (SaveMvPlanRequest r, EnmsService s, CancellationToken ct) =>
+            Results.Created("/api/v1/enms/mv", new { planId = await s.SaveMvPlanAsync(null, r, ct) })).RequirePermission(Permissions.EnergyManage);
+        g.MapPut("/mv/{id:guid}", async (Guid id, SaveMvPlanRequest r, EnmsService s, CancellationToken ct) =>
+        {
+            await s.SaveMvPlanAsync(id, r, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.EnergyManage);
+        g.MapDelete("/mv/{id:guid}", async (Guid id, EnmsService s, CancellationToken ct) =>
+        {
+            await s.DeleteMvPlanAsync(id, ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.EnergyManage);
+        g.MapGet("/mv/{id:guid}/result", (Guid id, EnmsService s, CancellationToken ct) => s.MvResultAsync(id, ct)).RequirePermission(Permissions.EnergyRead);
+        g.MapPost("/mv/{id:guid}/apply", (Guid id, EnmsService s, CancellationToken ct) => s.ApplyMvAsync(id, ct)).RequirePermission(Permissions.EnergyManage);
         g.MapGet("/findings", (EnmsService s, CancellationToken ct) => s.FindingsAsync(ct)).RequirePermission(Permissions.EnergyRead);
         g.MapPost("/findings", async (SaveFindingRequest r, EnmsService s, CancellationToken ct) =>
             Results.Created("/api/v1/enms/findings", new { findingId = await s.SaveFindingAsync(null, r, ct) })).RequirePermission(Permissions.EnergyManage);
@@ -744,3 +858,7 @@ public static class Endpoints
             s.PushAsync(http.Headers["X-Device-Key"].FirstOrDefault(), r, ct)).WithTags("Telemetry").RequireRateLimiting(IngestRateLimit);
     }
 }
+
+public sealed record RegionRequest(string Region);
+public sealed record ItemFactorRequest(decimal? KgCo2ePerUnit, string? Source);
+public sealed record ProductMassRequest(decimal? MassKg);

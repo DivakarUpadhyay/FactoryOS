@@ -17,6 +17,10 @@ public static class DependencyInjection
         services.AddSingleton<IConnectorFactory, S7ConnectorFactory>();
         services.AddSingleton<IConnectorFactory, OpcUaConnectorFactory>();
         services.AddSingleton<IConnectorFactory>(_ => new MtConnectConnectorFactory(new HttpClient { Timeout = TimeSpan.FromSeconds(10) }));
+        services.AddSingleton<IConnectorFactory, SparkplugConnectorFactory>();
+        services.AddSingleton<IConnectorFactory, Ros2ConnectorFactory>();
+        services.AddSingleton<IConnectorFactory, UrRtdeConnectorFactory>();
+        services.AddSingleton<IConnectorFactory, SecsGemConnectorFactory>();
         services.AddSingleton<IOrderPublisher, Vda5050OrderPublisher>();
         services.AddSingleton<Divakar.FactoryOS.Application.Energy.IConnectorWriter, ModbusWriter>();
         services.AddSingleton<Divakar.FactoryOS.Application.Energy.IConnectorWriter, MqttWriter>();

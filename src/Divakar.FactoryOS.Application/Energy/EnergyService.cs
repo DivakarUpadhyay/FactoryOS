@@ -55,7 +55,8 @@ public sealed record CarbonReport(DateTime From, DateTime To, decimal Electricit
     double GasM3, double Scope1Kg, double Scope2Kg, double AvoidedKg, double TotalKg, double? KgPerPart, double Parts,
     IReadOnlyList<DayCarbon> Daily, IReadOnlyList<AreaCarbon> ByArea,
     string? ElectricityReference = null, string? GasReference = null, IReadOnlyList<FuelEmission>? Fuels = null, double Scope2MarketKg = 0,
-    double GreenKwh = 0, double UnmeteredKwh = 0);
+    double GreenKwh = 0, double UnmeteredKwh = 0, double FugitiveKg = 0, double ProcessKg = 0, double Scope3Kg = 0,
+    IReadOnlyList<Scope3Line>? Scope3 = null, IReadOnlyList<GhgLine>? Activities = null, string GridRegion = "TW");
 
 /// <summary>A fuel (or unmetered electricity) entered from bills or deliveries, with its share of the period and emissions.</summary>
 public sealed record FuelEmission(string Source, string Unit, double Quantity, decimal Factor, double Kg, byte Scope, string? FactorName);
@@ -67,7 +68,7 @@ public sealed record AreaCarbon(string Meter, double Kg);
 /// difference, demand and power tags give peaks, machine state plus power gives idle waste.
 /// </summary>
 public sealed class EnergyService(IEnergyRepository repo, SettingsService settings, ModuleGate gate, ICurrentUser me,
-    EmissionFactorProvider factors, IEnmsRepository enms)
+    EmissionFactorProvider factors, IEnmsRepository enms, IGhgRepository ghg)
 {
     /// <summary>Grid factor for a year from the library (location-based), else the one in settings.</summary>
     private async Task<(decimal Kg, string? Reference)> GridFactorAsync(Guid tenantId, TenantSettings s, int year, CancellationToken ct)
@@ -314,7 +315,24 @@ public sealed class EnergyService(IEnergyRepository repo, SettingsService settin
         }
         fuels = [.. fuels.GroupBy(x => (x.Source, x.Unit)).Select(g => g.First() with { Quantity = Math.Round(g.Sum(x => x.Quantity), 2), Kg = Math.Round(g.Sum(x => x.Kg), 1) })];
 
-        var scope1 = gas * gf + fuels.Where(x => x.Scope == 1).Sum(x => x.Kg);
+        // refrigerant losses, process emissions and Scope 3 from activity data, for the part of each period inside this one
+        var lines = new List<GhgLine>();
+        foreach (var a in await ghg.ActivitiesAsync(tenantId, f.Date, t, ct))
+        {
+            var qty = (double)a.Quantity * EmissionMath.Overlap(a.PeriodFrom, a.PeriodTo, f, t);
+            if (qty > 0)
+            {
+                lines.Add(new GhgLine(a.Source, a.FactorName, a.Scope, a.Scope3Category, a.Method, a.Unit, qty, qty * (double)a.KgCo2ePerUnit));
+            }
+        }
+        lines = [.. lines.GroupBy(x => x.Source).Select(g => g.First() with { Quantity = Math.Round(g.Sum(x => x.Quantity), 3), Kg = Math.Round(g.Sum(x => x.Kg), 1) })
+            .OrderByDescending(x => x.Kg)];
+        var fugitive = lines.Where(x => x.Method == "Fugitive").Sum(x => x.Kg);
+        var process = lines.Where(x => x.Method == "Process").Sum(x => x.Kg);
+        var scope3 = lines.Where(x => x.Scope == 3).GroupBy(x => x.Scope3Category ?? 0)
+            .Select(g => new Scope3Line(g.Key, EmissionMath.Scope3Name(g.Key), Math.Round(g.Sum(x => x.Kg), 1))).OrderBy(x => x.Category).ToList();
+
+        var scope1 = gas * gf + fuels.Where(x => x.Scope == 1).Sum(x => x.Kg) + fugitive + process;
         var scope2 = grid * ef + fuels.Where(x => x.Scope == 2).Sum(x => x.Kg);
         // market-based: certified green power (T-REC, PPA) replaces grid electricity at zero emissions, never below zero
         var scope2Market = Math.Max(0, scope2 - Math.Min(green, grid + unmetered) * ef);
@@ -322,6 +340,68 @@ public sealed class EnergyService(IEnergyRepository repo, SettingsService settin
             Math.Round(scope1, 1), Math.Round(scope2, 1), Math.Round(solar * ef, 1), Math.Round(scope1 + scope2, 1),
             parts > 0 ? Math.Round((scope1 + scope2) / parts, 4) : null, Math.Round(parts, 0), days, byArea,
             elecRef, gasLib is null ? "Settings" : $"{gasLib.Name} — {gasLib.Reference}", fuels, Math.Round(scope2Market, 1), Math.Round(green, 1),
-            Math.Round(unmetered, 1));
+            Math.Round(unmetered, 1), Math.Round(fugitive, 1), Math.Round(process, 1), Math.Round(scope3.Sum(x => x.Kg), 1), scope3, lines,
+            EmissionMath.GridRegion(lib));
+    }
+
+    /// <summary>
+    /// Product carbon footprint, cradle to gate (partial), in the spirit of ISO 14067 and the GHG Protocol Product Standard: purchased
+    /// materials from the bill of materials with their cradle-to-gate factors, plus the electricity each completed work order's machine
+    /// used while it ran (hourly roll-ups), a share of the site's other electricity and of its Scope 1, both allocated by machine energy.
+    /// </summary>
+    public async Task<FootprintReport> FootprintAsync(DateTime? from, DateTime? to, CancellationToken ct)
+    {
+        var carbon = await CarbonAsync(from, to, ct);
+        var tenantId = me.RequireTenant();
+        var orders = await ghg.CompletedOrdersAsync(tenantId, carbon.From, carbon.To, ct);
+        var machines = (await repo.CounterDeltasAsync(tenantId, ["energy_kwh"], carbon.From, carbon.To, ct)).Where(e => e.Category != "Energy").Sum(e => e.Delta);
+        var site = carbon.GridKwh + carbon.UnmeteredKwh;
+        var overheadShare = machines > 0 ? Math.Max(0, site - machines) / machines : 0;
+        var ef = (double)carbon.ElectricityFactor;
+        var materials = (await ghg.BomMaterialsAsync(tenantId, [.. orders.Select(o => o.ProductId).Distinct()], ct)).ToLookup(m => m.ProductId);
+
+        var products = new List<ProductFootprint>();
+        foreach (var g in orders.GroupBy(o => o.ProductId))
+        {
+            var first = g.First();
+            var units = g.Sum(o => o.GoodQty);
+            var direct = g.Sum(o => o.Kwh);
+            var overhead = direct * overheadShare;
+            var elecKg = (direct + overhead) * ef;
+            var s1 = machines > 0 ? carbon.Scope1Kg * direct / machines : 0;
+            var mats = materials[g.Key].Select(m =>
+            {
+                var qty = (double)(m.QtyPer * (1 + m.ScrapPct / 100));
+                return new MaterialFootprint(m.ItemCode, m.ItemName, m.Unit, Math.Round(qty, 5), m.KgCo2ePerUnit is { } k ? (double)k : null,
+                    m.KgCo2ePerUnit is { } kg ? Math.Round(qty * (double)kg, 4) : 0, m.Co2eSource);
+            }).ToList();
+            var matPerUnit = mats.Sum(m => m.KgPerProduct);
+            var energyPerUnit = units > 0 ? (elecKg + s1) / units : 0;
+            var perUnit = energyPerUnit + matPerUnit;
+            products.Add(new ProductFootprint(g.Key, first.ProductCode, first.ProductName, g.Count(), units, first.MassKg, Math.Round(direct, 1),
+                Math.Round(overhead, 1), Math.Round(elecKg, 1), Math.Round(s1, 1), Math.Round(matPerUnit * units, 1), Math.Round(elecKg + s1 + matPerUnit * units, 1),
+                Math.Round(perUnit, 4), first.MassKg is > 0 ? Math.Round(perUnit / ((double)first.MassKg.Value / 1000), 1) : null,
+                Math.Round(units > 0 ? elecKg / units : 0, 4), Math.Round(matPerUnit, 4), mats.Count(m => m.KgCo2ePerUnit is not null), mats.Count, mats));
+        }
+
+        var notes = new List<string>
+        {
+            $"Electricity at the location-based factor {carbon.ElectricityFactor:0.####} kg CO₂e/kWh; machine energy per work order is counted to the hour.",
+            $"Site electricity not on a machine meter ({Math.Max(0, site - machines):N0} kWh, {overheadShare:P0} of machine energy) and the site's Scope 1 "
+                + $"({carbon.Scope1Kg:N0} kg) are shared out by each order's machine energy.",
+            "Not included: packaging and parts outside the bill of materials, transport of materials and products, use and end of life.",
+        };
+        var missing = products.SelectMany(p => p.Materials).Where(m => m.KgCo2ePerUnit is null).Select(m => m.ItemCode).Distinct().ToList();
+        if (missing.Count > 0)
+        {
+            notes.Add($"Materials without a cradle-to-gate factor (counted as zero): {string.Join(", ", missing)}. Add the supplier's EPD value or a database factor.");
+        }
+        if (orders.Count == 0)
+        {
+            notes.Add("No completed work orders in the period.");
+        }
+        return new FootprintReport(carbon.From, carbon.To, "Cradle to gate (partial): materials in the BOM + production energy", carbon.ElectricityFactor,
+            carbon.ElectricityReference, Math.Round(site, 1), Math.Round(machines, 1), Math.Round(overheadShare * 100, 1), carbon.Scope1Kg,
+            [.. products.OrderByDescending(p => p.TotalKg)], notes);
     }
 }

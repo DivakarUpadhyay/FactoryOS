@@ -1,3 +1,4 @@
+using Divakar.FactoryOS.Application.Ai;
 using Divakar.FactoryOS.Application.Alarms;
 using Divakar.FactoryOS.Application.Assistant;
 using Divakar.FactoryOS.Application.Platform;
@@ -56,6 +57,9 @@ public static class DependencyInjection
         services.AddScoped<AlarmService>();
         services.AddScoped<AlarmEngine>();
         services.AddScoped<AnomalyDetector>();
+        services.AddScoped<OtAiJob>();
+        services.AddScoped<OtAiService>();
+        services.AddScoped<EdgeService>();
         services.AddScoped<MaintenanceService>();
         services.AddScoped<PmScheduler>();
         services.AddScoped<IAlarmWorkOrders>(sp => sp.GetRequiredService<PmScheduler>());

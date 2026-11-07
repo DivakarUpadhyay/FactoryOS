@@ -19,7 +19,7 @@ async function call(method, path, body) {
 (async () => {
   token = (await call("POST", "/api/v1/auth/login", { email: "admin@divakar-demo.local", password })).accessToken;
   // start clean so the script can be run again
-  for (const [list, key, path] of [["/api/v1/enms/actions", "actionId", "actions"], ["/api/v1/enms/objectives", "objectiveId", "objectives"],
+  for (const [list, key, path] of [["/api/v1/enms/mv", "planId", "mv"], ["/api/v1/enms/actions", "actionId", "actions"], ["/api/v1/enms/objectives", "objectiveId", "objectives"],
     ["/api/v1/enms/enpis", "enpiId", "enpis"], ["/api/v1/enms/seus", "seuId", "seus"], ["/api/v1/enms/documents", "documentId", "documents"],
     ["/api/v1/enms/findings", "findingId", "findings"], ["/api/v1/enms/entries", "entryId", "entries"]]) {
     for (const x of await call("GET", list)) await call("DELETE", `/api/v1/enms/${path}/${x[key]}`);

@@ -46,6 +46,9 @@ public sealed class IngestionStore(Db db, SecretProtector secrets) : IIngestionS
         return await BindingSql.ReadAsync(con, BindingSql.Select + """
              JOIN core.Tenants tn ON tn.TenantId = a.TenantId
             WHERE a.IsActive = 1 AND a.ProtocolCode IN @protocols AND tn.Status IN ('Trial','Active')
+              -- an edge agent in the plant reads these assets itself
+              AND NOT EXISTS (SELECT 1 FROM plant.EdgeAgentAssets x JOIN plant.EdgeAgents g ON g.AgentId = x.AgentId AND g.IsActive = 1
+                              WHERE x.AssetId = a.AssetId)
             """, new { protocols }, secrets, ct);
     }
 

@@ -70,6 +70,11 @@ public static class DependencyInjection
         services.AddScoped<IEnergyRepository, EnergyRepository>();
         services.AddScoped<ILoadShedRepository, LoadShedRepository>();
         services.AddScoped<IEnmsRepository, EnmsRepository>();
+        services.AddScoped<IEnmsMeasurementRepository, EnmsMeasurementRepository>();
+        services.AddScoped<IGhgRepository, GhgRepository>();
+        services.AddScoped<Divakar.FactoryOS.Application.Ai.IOtAiStore, OtAiStore>();
+        services.AddScoped<Divakar.FactoryOS.Application.Ai.IOtAiRepository, OtAiRepository>();
+        services.AddScoped<IEdgeRepository, EdgeRepository>();
         services.AddScoped<IAssetBindingSource, AssetBindingSource>();
         services.AddScoped<ISettingsRepository, SettingsRepository>();
         services.AddScoped<IProductionRepository, ProductionRepository>();

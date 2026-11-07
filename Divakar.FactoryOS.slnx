@@ -4,6 +4,7 @@
     <Project Path="src/Divakar.FactoryOS.Application/Divakar.FactoryOS.Application.csproj" />
     <Project Path="src/Divakar.FactoryOS.Connectors/Divakar.FactoryOS.Connectors.csproj" />
     <Project Path="src/Divakar.FactoryOS.Domain/Divakar.FactoryOS.Domain.csproj" />
+    <Project Path="src/Divakar.FactoryOS.Edge/Divakar.FactoryOS.Edge.csproj" />
     <Project Path="src/Divakar.FactoryOS.Infrastructure/Divakar.FactoryOS.Infrastructure.csproj" />
     <Project Path="src/Divakar.FactoryOS.Worker/Divakar.FactoryOS.Worker.csproj" />
   </Folder>

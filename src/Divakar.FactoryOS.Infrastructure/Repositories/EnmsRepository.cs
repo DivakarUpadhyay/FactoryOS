@@ -9,7 +9,7 @@ public sealed class EnmsRepository(Db db) : IEnmsRepository
 {
     private const string FactorColumns = """
         FactorId, Source, Name, Scope, Method, Region, Year, Unit, HeatKcalPerUnit, Co2KgPerTj, Ch4KgPerTj, N2oKgPerTj, KgCo2ePerUnit, GwpSet,
-        Reference, IsActive
+        Reference, IsActive, Scope3Category
         """;
 
     public async Task<IReadOnlyList<EmissionFactor>> FactorsAsync(Guid tenantId, CancellationToken ct)
@@ -26,24 +26,25 @@ public sealed class EnmsRepository(Db db) : IEnmsRepository
         var args = new
         {
             tenantId, id, r.Source, r.Name, r.Scope, r.Method, r.Region, r.Year, r.Unit, r.HeatKcalPerUnit, r.Co2KgPerTj, r.Ch4KgPerTj, r.N2oKgPerTj,
-            r.KgCo2ePerUnit, r.GwpSet, r.Reference, r.IsActive,
+            r.KgCo2ePerUnit, r.GwpSet, r.Reference, r.IsActive, r.Scope3Category,
         };
         if (id is not null)
         {
             var n = await con.ExecuteAsync(new CommandDefinition("""
                 UPDATE enms.EmissionFactors SET Source = @Source, Name = @Name, Scope = @Scope, Method = @Method, Region = @Region, Year = @Year, Unit = @Unit,
                        HeatKcalPerUnit = @HeatKcalPerUnit, Co2KgPerTj = @Co2KgPerTj, Ch4KgPerTj = @Ch4KgPerTj, N2oKgPerTj = @N2oKgPerTj,
-                       KgCo2ePerUnit = @KgCo2ePerUnit, GwpSet = @GwpSet, Reference = @Reference, IsActive = @IsActive, UpdatedAt = SYSUTCDATETIME()
+                       KgCo2ePerUnit = @KgCo2ePerUnit, GwpSet = @GwpSet, Reference = @Reference, IsActive = @IsActive, Scope3Category = @Scope3Category,
+                       UpdatedAt = SYSUTCDATETIME()
                 WHERE TenantId = @tenantId AND FactorId = @id
                 """, args, cancellationToken: ct));
             return n == 0 ? throw Application.Common.AppException.NotFound("Emission factor") : id.Value;
         }
         return await con.ExecuteScalarAsync<Guid>(new CommandDefinition("""
             INSERT enms.EmissionFactors (TenantId, Source, Name, Scope, Method, Region, Year, Unit, HeatKcalPerUnit, Co2KgPerTj, Ch4KgPerTj, N2oKgPerTj,
-                   KgCo2ePerUnit, GwpSet, Reference, IsActive)
+                   KgCo2ePerUnit, GwpSet, Reference, IsActive, Scope3Category)
             OUTPUT inserted.FactorId
             VALUES (@tenantId, @Source, @Name, @Scope, @Method, @Region, @Year, @Unit, @HeatKcalPerUnit, @Co2KgPerTj, @Ch4KgPerTj, @N2oKgPerTj,
-                   @KgCo2ePerUnit, @GwpSet, @Reference, @IsActive)
+                   @KgCo2ePerUnit, @GwpSet, @Reference, @IsActive, @Scope3Category)
             """, args, cancellationToken: ct));
     }
 
@@ -55,15 +56,15 @@ public sealed class EnmsRepository(Db db) : IEnmsRepository
         {
             added += await con.ExecuteAsync(new CommandDefinition("""
                 INSERT enms.EmissionFactors (TenantId, Source, Name, Scope, Method, Region, Year, Unit, HeatKcalPerUnit, Co2KgPerTj, Ch4KgPerTj, N2oKgPerTj,
-                       KgCo2ePerUnit, GwpSet, Reference, IsActive)
+                       KgCo2ePerUnit, GwpSet, Reference, IsActive, Scope3Category)
                 SELECT @tenantId, @Source, @Name, @Scope, @Method, @Region, @Year, @Unit, @HeatKcalPerUnit, @Co2KgPerTj, @Ch4KgPerTj, @N2oKgPerTj,
-                       @KgCo2ePerUnit, @GwpSet, @Reference, @IsActive
+                       @KgCo2ePerUnit, @GwpSet, @Reference, @IsActive, @Scope3Category
                 WHERE NOT EXISTS (SELECT 1 FROM enms.EmissionFactors WHERE TenantId = @tenantId AND Source = @Source AND Method = @Method
                                   AND Region = @Region AND Year = @Year)
                 """, new
             {
                 tenantId, r.Source, r.Name, r.Scope, r.Method, r.Region, r.Year, r.Unit, r.HeatKcalPerUnit, r.Co2KgPerTj, r.Ch4KgPerTj, r.N2oKgPerTj,
-                r.KgCo2ePerUnit, r.GwpSet, r.Reference, r.IsActive,
+                r.KgCo2ePerUnit, r.GwpSet, r.Reference, r.IsActive, r.Scope3Category,
             }, cancellationToken: ct));
         }
         return added;

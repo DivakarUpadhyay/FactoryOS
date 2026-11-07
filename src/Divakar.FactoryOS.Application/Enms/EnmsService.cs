@@ -21,6 +21,14 @@ public sealed class EmissionFactorProvider(IEnmsRepository repo)
         if (list.Count == 0)
         {
             await repo.AddMissingFactorsAsync(tenantId, EmissionMath.TaiwanDefaults(), ct);
+        }
+        if (!list.Any(f => EmissionMath.Category(f.Source) != "energy"))
+        {
+            // libraries made before refrigerant, process and Scope 3 factors existed get them (and other regions' grid factors, switched off)
+            await repo.AddMissingFactorsAsync(tenantId, [.. EmissionMath.ActivityDefaults(), .. EmissionMath.RegionalGridFactors()], ct);
+        }
+        if (list.Count == 0 || !list.Any(f => EmissionMath.Category(f.Source) != "energy"))
+        {
             list = await repo.FactorsAsync(tenantId, ct);
         }
         return cache = list;
@@ -35,8 +43,8 @@ public sealed class EmissionFactorProvider(IEnmsRepository repo)
 /// information (4–8), monitoring of actual against expected consumption (9.1), internal audit, management review and
 /// nonconformities (9.2, 9.3, 10.1).
 /// </summary>
-public sealed class EnmsService(IEnmsRepository repo, IEnergyRepository energy, EmissionFactorProvider factors, SettingsService settings,
-    ModuleGate gate, ICurrentUser me, IAuditLog audit)
+public sealed partial class EnmsService(IEnmsRepository repo, IEnergyRepository energy, EmissionFactorProvider factors, SettingsService settings,
+    ModuleGate gate, ICurrentUser me, IAuditLog audit, IEnmsMeasurementRepository measures, IGhgRepository ghg)
 {
     public static readonly string[] DocumentKinds =
         ["Context", "Parties", "Scope", "Policy", "Team", "Risk", "Legal", "DataPlan", "Competence", "Communication", "Design", "Procurement"];
@@ -61,13 +69,36 @@ public sealed class EnmsService(IEnmsRepository repo, IEnergyRepository energy, 
     public async Task<Guid> SaveFactorAsync(Guid? id, SaveFactorRequest r, CancellationToken ct)
     {
         var tenantId = await Begin(ct);
-        if (!EmissionMath.Sources.Contains(r.Source))
+        var category = EmissionMath.Category(r.Source);
+        if (category == "energy" ? !EmissionMath.Sources.Contains(r.Source) : !EmissionMath.ActivityCode.IsMatch(r.Source))
         {
-            throw AppException.Validation($"Source is one of: {string.Join(", ", EmissionMath.Sources)}.");
+            throw AppException.Validation($"Source is one of: {string.Join(", ", EmissionMath.Sources)}, or a code starting ref_, proc_ or s3_ "
+                + "(lower-case letters, digits and _).");
         }
-        if (r.Scope is < 1 or > 3 || r.Method is not ("Combustion" or "Location" or "Market"))
+        if (r.Scope is < 1 or > 3)
         {
-            throw AppException.Validation("Scope is 1–3 and method is Combustion, Location or Market.");
+            throw AppException.Validation("Scope is 1–3.");
+        }
+        var methodOk = category switch
+        {
+            "refrigerant" => r.Method == "Fugitive" && r.Scope == 1,
+            "process" => r.Method == "Process" && r.Scope == 1,
+            "scope3" => r.Method == "Activity" && r.Scope == 3 && r.Scope3Category is >= 1 and <= 15,
+            _ => r.Method is "Combustion" or "Location" or "Market",
+        };
+        if (!methodOk)
+        {
+            throw AppException.Validation(category switch
+            {
+                "refrigerant" => "Refrigerant factors (ref_) are Scope 1, method Fugitive.",
+                "process" => "Process factors (proc_) are Scope 1, method Process.",
+                "scope3" => "Scope 3 factors (s3_) are scope 3, method Activity, with a Scope 3 category 1–15.",
+                _ => "Energy factors use method Combustion, Location or Market.",
+            });
+        }
+        if (category != "energy" && r.KgCo2ePerUnit is null)
+        {
+            throw AppException.Validation("Give kg CO₂e per unit (for a gas, its GWP per kg released).");
         }
         if (r.Year is < 1990 or > 2100)
         {
@@ -85,6 +116,7 @@ public sealed class EnmsService(IEnmsRepository repo, IEnergyRepository energy, 
         {
             Name = Guard.Required(r.Name, "Name", 150), Region = Guard.Required(r.Region, "Region", 10), Unit = Guard.Required(r.Unit, "Unit", 10),
             Reference = Guard.Required(r.Reference, "Reference (the published source)", 400), GwpSet = r.GwpSet is "AR6" ? "AR6" : "AR5",
+            Scope3Category = category == "scope3" ? r.Scope3Category : null,
         };
         try
         {
@@ -599,6 +631,12 @@ public sealed class EnmsService(IEnmsRepository repo, IEnergyRepository energy, 
         var weakModels = enpis.Count(e => e.Kind == "Regression" && e.R2 < MinR2);
         var lastAudit = audits.MaxBy(a => a.HeldOn)?.HeldOn;
         var lastReview = reviews.MaxBy(a => a.HeldOn)?.HeldOn;
+        // 9.1: measuring equipment for EnPIs must be accurate and repeatable, with calibration records
+        var meterStates = (await measures.MetersAsync(tenantId, ct)).Where(m => m.IsActive && m.Kind != "Virtual").Select(m => Status(m, today)).ToList();
+        var badMeters = meterStates.Where(m => m.State is "overdue" or "failed" or "never" or "untracked").ToList();
+        var meterOk = meterStates.Count > 0 && badMeters.Count == 0;
+        var meterGap = meterStates.Count == 0 ? "No meters in the register, so meter accuracy and calibration cannot be shown."
+            : $"{badMeters.Count} of {meterStates.Count} meter(s) without a valid calibration: {string.Join(", ", badMeters.Take(4).Select(m => m.Meter.Name))}.";
 
         var clauses = new List<ClauseCheck>
         {
@@ -625,9 +663,10 @@ public sealed class EnmsService(IEnmsRepository repo, IEnergyRepository energy, 
                 "Some SEUs have no operating criteria."),
             Doc("8.2", "Design (energy performance in new and modified facilities)", "Design"),
             Doc("8.3", "Procurement of energy, services and equipment", "Procurement"),
-            Check("9.1", "Monitoring, measurement, analysis; legal compliance", enpis.Count > 0 && docs.Any(d => d.Kind == "Legal"),
-                "EnPIs are evaluated against expected consumption; legal register in place.", "Nothing monitored against a baseline.",
-                enpis.Count > 0 || docs.Any(d => d.Kind == "Legal"), "Needs both EnPI monitoring and a legal requirements register."),
+            Check("9.1", "Monitoring, measurement, analysis; legal compliance", enpis.Count > 0 && docs.Any(d => d.Kind == "Legal") && meterOk,
+                $"EnPIs are evaluated against expected consumption; legal register in place; {meterStates.Count} meter(s) with valid calibration records.",
+                "Nothing monitored against a baseline.", enpis.Count > 0 || docs.Any(d => d.Kind == "Legal"),
+                !meterOk && enpis.Count > 0 && docs.Any(d => d.Kind == "Legal") ? meterGap : "Needs EnPI monitoring, a legal requirements register and calibrated meters."),
             Check("9.2", "Internal audit", lastAudit >= year, $"Last internal audit {lastAudit:yyyy-MM-dd}.", "No internal audit recorded.", lastAudit is not null,
                 $"Last internal audit {lastAudit:yyyy-MM-dd} is more than a year ago."),
             Check("9.3", "Management review", lastReview >= year, $"Last management review {lastReview:yyyy-MM-dd}.", "No management review recorded.",

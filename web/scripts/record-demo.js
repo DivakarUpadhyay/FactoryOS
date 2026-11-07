@@ -41,7 +41,7 @@ let apiHost = null;
   const paths = ["/app", "/app/plant", "/app/floor", "/app/connectivity", "/app/energy", "/app/power", "/app/carbon",
     "/app/production", "/app/robotics", "/app/maintenance", "/app/alarms", "/app/quality", "/app/inventory",
     "/app/reports", "/app/dashboards", "/app/twin", "/app/assistant", "/app/audit", "/app/users", "/app/roles",
-    "/app/security", "/app/settings", "/app/account", "/op", "/app/enms"];
+    "/app/security", "/app/settings", "/app/account", "/op", "/app/enms", "/app/ai"];
 
   async function visit(p) {
     try {
@@ -77,6 +77,9 @@ let apiHost = null;
   const home = body("GET /api/v1/production/operator") ?? (await grab("/api/v1/production/operator"));
   for (const m of home?.machines ?? []) await grab(`/api/v1/production/operator/entries?assetId=${m.assetId}`);
   for (const e of body("GET /api/v1/enms/enpis") ?? []) await grab(`/api/v1/enms/enpis/${e.enpiId}/results`);
+  for (const p of body("GET /api/v1/enms/mv") ?? (await grab("/api/v1/enms/mv")) ?? []) await grab(`/api/v1/enms/mv/${p.planId}/result`);
+  for (const m of body("GET /api/v1/enms/meters") ?? (await grab("/api/v1/enms/meters")) ?? []) await grab(`/api/v1/enms/meters/${m.meter.meterId}/calibrations`);
+  await grab("/api/v1/ai/insights?all=true");
   const lotNos = (body("GET /api/v1/inventory/lots") ?? []).map((l) => l.lotNo);
   for (const lotNo of lotNos) await grab(`/api/v1/trace?lot=${encodeURIComponent(lotNo)}`);
   console.log(`extras: ${(home?.machines ?? []).length} machines, ${(body("GET /api/v1/enms/enpis") ?? []).length} EnPIs, ${lotNos.length} lot traces`);

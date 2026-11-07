@@ -80,6 +80,10 @@ stations, alarm rules, maintenance plans, products, SPC characteristics and stoc
 | MQTT | `mqtt://broker:1883` | `plant/line1/temp` or `plant/line1/state\|$.data.temp` (JSON path; `+`/`#` wildcards) |
 | VDA 5050 (AGV/AMR) | `broker:1883`, vendor = manufacturer, serial no. = serial | state topic JSON paths, e.g. `uagv/v2/Hiwin/AGV-07/state\|$.batteryState.batteryCharge` |
 | MTConnect | `http://agent:5000` | data item id |
+| Sparkplug B | `broker:1883` | `group/edgeNode/device\|metric name` (device optional for node metrics); aliases from BIRTH, rebirth requested when unknown |
+| ROS 2 (rosbridge) | `ws://robot:9090` | `/topic\|msg/type\|$.path`, e.g. `/battery_state\|sensor_msgs/msg/BatteryState\|$.percentage` |
+| UR RTDE | `robot:30004` | RTDE output variable, `[i]` for vectors: `robot_mode`, `actual_TCP_speed[0]`, `joint_temperatures[3]` |
+| SECS/GEM (HSMS-SS) | `tool:5000`, settings `{"deviceId":0,"t3":45}` | status variable id: `1001` or `svid:1001` (read with S1F3/S1F4) |
 | HTTP push | — | tag code; device posts to `/api/v1/ingest` with header `X-Device-Key` |
 | Others (EtherNet/IP, MC, FINS, BACnet, DNP3, IEC 61850, LoRaWAN…) | via an OPC UA or MQTT gateway | the gateway's node / topic |
 
@@ -95,7 +99,9 @@ stations, alarm rules, maintenance plans, products, SPC characteristics and stoc
 | **Floor plan / 3D twin** | Machines coloured by live state with live kW; click to open. 3D: drag to orbit, scroll to zoom; running machines glow with power draw. |
 | **Energy** | kWh, time-of-use cost, peak demand vs contract, idle waste, energy per part, per-hour profile, actionable insights |
 | **Power quality** | Voltage, current, PF, THD, frequency at each analyser/meter with min/max/avg and limit grading |
-| **Carbon / ESG** | Scope 1 (gas) and 2 (grid) CO₂e, solar avoided, per day, by area meter, per part; CSV export |
+| **Carbon / ESG** | Scope 1 (fuels, refrigerant losses, process CO₂), Scope 2 location- and market-based, Scope 3 by GHG Protocol category (reported separately), solar avoided, per day, by area meter, per part; product carbon footprint per unit and per tonne (cradle to gate, partial); CSV export |
+| **ISO 50001 EnMS** | Clause-by-clause readiness (4–10), energy review and SEUs, EnPIs and baselines (ISO 50006 regression, CUSUM), objectives and actions, **savings M&V** (IPMVP options A–D; B and C computed with ASHRAE Guideline 14 CV(RMSE), NMBE, autocorrelation and savings uncertainty, then written to the action as verified), **meter register and calibration records** (9.1), emission factor library (TW MOEA/MOENV, UK DESNZ 2025, US eGRID2023, IN CEA; refrigerants AR5; Scope 3 DESNZ 2025), **GHG activities**, documents, audits and management reviews |
+| **OT AI insights** | Detectors that learn each signal's own normal: energy per hour of the week (robust z-score), meters that stop counting, drift (EWMA + CUSUM), frozen sensors, time to a limit (trend fit), idle machines at high power; from the cloud worker every 5 min and from edge agents within seconds. Operators mark each one real or false; that tunes the detector per signal. |
 | **Production & OEE** | Plant and machine OEE (A × P × Q) with PackML states; downtime is detected automatically — operators pick the reason; Pareto; work orders that count from the machine counter; shift reports |
 | **Robotics & AGV** | Live fleet map, battery, utilisation, robot joint temperature/torque health; transport missions dispatched to the nearest free vehicle with enough battery (sent as VDA 5050 orders to real vehicles) |
 | **Alarms** | Rules: *sensor* *operator* *threshold* for *N seconds* on one asset / a type / all → Info/Warning/Critical, e-mail/webhook, optional work order. Auto-clear, acknowledge with a comment, escalation after 15 min. Predictive anomalies (vibration, bearing/joint temperature, motor current) and SPC quality alarms appear here too. Live pop-ups and the bell in the top bar. |
@@ -212,8 +218,15 @@ production build for real use. Raw numbers: `final/results.json` and `final/prod
 
 - **Payments** are recorded by hand; connecting ECPay/Stripe needs your merchant account.
 - **E-mail** needs an SMTP server; **AI free-form answers** need an Anthropic API key (built-in answers work without).
-- Protocols marked *Gateway* or *Planned* in the catalogue (e.g. Sparkplug B, ROS 2, UR RTDE, SECS/GEM) need a gateway today.
-- The simulator drives the demo; real machines need their addresses and network access.
+- Protocols marked *Gateway* in the catalogue (EtherNet/IP, MC protocol, FINS, BACnet, DNP3, IEC 61850…) need an OPC UA or MQTT gateway.
+  Sparkplug B, ROS 2, UR RTDE and SECS/GEM have native drivers since November 2026, tested against protocol-level test servers.
+- The simulator drives the demo; real machines need their addresses and network access. No driver has yet been commissioned on a
+  customer's production equipment: use the site acceptance checklist in [EDGE.md](EDGE.md) for each machine.
+- The EnMS readiness view is a self-assessment against the clauses, not a certification; an accredited certification body audits.
+- Scope 3 defaults are UK DESNZ 2025 averages; use supplier or local factors where you have them. Material factors for the product
+  footprint come from the supplier (EPD) or a database you license.
+- The OT detectors are statistical models per signal (no deep-learning model is trained); they need about two days of history
+  before they report anything.
 - Docker files are provided but were not run on the development PC.
 
 © 2026 Divakar Upadhyay

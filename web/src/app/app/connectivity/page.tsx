@@ -7,11 +7,14 @@ import { api } from "@/lib/api";
 import { ConnectionRow, ago, statusTone } from "@/lib/types";
 import { useLive } from "@/lib/live";
 import { Badge, Card, ErrorNote, Input, LiveBadge, PageHeader, Select, Stat, Table, errorText } from "@/components/ui";
+import { EdgeAgents } from "@/components/edge-agents";
+import { useAuth } from "@/lib/auth";
 
 const supportTone = { Native: "ok", Push: "info", Gateway: "warn", Planned: "muted" } as const;
 
 /** Every asset's connection health, refreshed every 5 seconds. */
 export default function ConnectivityPage() {
+  const { can } = useAuth();
   const [rows, setRows] = useState<ConnectionRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
@@ -91,6 +94,7 @@ export default function ConnectivityPage() {
           ))}
         </Table>
       </Card>
+      <EdgeAgents assets={rows.map((r) => ({ assetId: r.assetId, name: r.name, code: r.code }))} manage={can("connectivity.manage")} onError={setError} />
     </>
   );
 }

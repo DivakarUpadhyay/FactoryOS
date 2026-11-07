@@ -123,6 +123,32 @@ public sealed class FactoryOsApp : WebApplicationFactory<Program>
         await engine.DisposeAsync();
     }
 
+    /// <summary>Replays the simulator over a past period (one pass every <paramref name="secondsApart"/>), like the worker's --backfill.</summary>
+    public async Task BackfillAsync(Guid tenantId, DateTime from, DateTime to, int secondsApart)
+    {
+        using var scope = Services.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<Divakar.FactoryOS.Application.Connectivity.IIngestionStore>();
+        var simulator = new Divakar.FactoryOS.Application.Connectivity.ConnectorRegistry(
+            scope.ServiceProvider.GetServices<Divakar.FactoryOS.Application.Connectivity.IConnectorFactory>()
+                .OfType<Divakar.FactoryOS.Connectors.Simulation.SimulatorConnectorFactory>());
+        await using var engine = new Divakar.FactoryOS.Application.Connectivity.IngestionEngine(new OneTenantStore(store, tenantId), simulator,
+            new Divakar.FactoryOS.Application.Connectivity.IngestionOptions { RefreshBindingsSeconds = int.MaxValue / 2 },
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<Divakar.FactoryOS.Application.Connectivity.IngestionEngine>.Instance);
+        for (var t = from; t < to; t = t.AddSeconds(secondsApart))
+        {
+            await engine.RunOnceAsync(t, default);
+        }
+    }
+
+    private sealed class OneTenantStore(Divakar.FactoryOS.Application.Connectivity.IIngestionStore inner, Guid tenantId)
+        : Divakar.FactoryOS.Application.Connectivity.IIngestionStore
+    {
+        public async Task<IReadOnlyList<Divakar.FactoryOS.Application.Connectivity.AssetBinding>> ActiveBindingsAsync(IReadOnlyCollection<string> protocols, CancellationToken ct) =>
+            [.. (await inner.ActiveBindingsAsync(protocols, ct)).Where(b => b.TenantId == tenantId)];
+        public Task WriteAsync(IReadOnlyList<Divakar.FactoryOS.Application.Connectivity.ReadingRow> rows, CancellationToken ct) => inner.WriteAsync(rows, ct);
+        public Task UpdateHealthAsync(IReadOnlyList<Divakar.FactoryOS.Application.Connectivity.AssetHealth> health, CancellationToken ct) => inner.UpdateHealthAsync(health, ct);
+    }
+
     /// <summary>The bearer token a signed-in client sends.</summary>
     public static string TokenOf(HttpClient client) => client.DefaultRequestHeaders.Authorization!.Parameter!;
 

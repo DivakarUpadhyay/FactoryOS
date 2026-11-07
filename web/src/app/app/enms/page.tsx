@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { BarChart, HBars, Ring, fmt } from "@/components/charts";
 import { Badge, Button, Card, ErrorNote, Field, Input, Modal, PageHeader, Select, Stat, Table, cx, errorText } from "@/components/ui";
+import { ActivitiesTab, MetersTab, MvTab } from "./extra";
 
 // ---------- types (API shapes) ----------
 type Clause = { clause: string; title: string; state: "ok" | "warn" | "missing"; evidence: string };
@@ -25,7 +26,7 @@ type Review = { from: string; to: string; totalKwh: number; meteredMachinesKwh: 
 type Factor = {
   factorId: string; source: string; name: string; scope: number; method: string; region: string; year: number; unit: string; heatKcalPerUnit: number | null;
   co2KgPerTj: number | null; ch4KgPerTj: number | null; n2oKgPerTj: number | null; kgCo2ePerUnit: number | null; gwpSet: string; reference: string;
-  isActive: boolean; co2e: number;
+  isActive: boolean; co2e: number; scope3Category: number | null;
 };
 type Entry = { entryId: string; source: string; periodFrom: string; periodTo: string; quantity: number; unit: string; cost: number | null; instrument: string | null; reference: string | null; note: string | null };
 type Seu = { seuId: string; name: string; assetIds: string; relevantVariables: string | null; operatingCriteria: string | null; owner: string | null };
@@ -38,7 +39,8 @@ type Asset = { assetId: string; name: string; code: string };
 
 const TABS = [
   ["overview", "Overview"], ["review", "Energy review & SEUs"], ["enpis", "EnPIs & baselines"], ["plans", "Objectives & actions"],
-  ["factors", "Emission factors"], ["data", "Energy data"], ["documents", "Documents"], ["audits", "Audits & reviews"],
+  ["mv", "Savings M&V"], ["meters", "Meters & calibration"], ["factors", "Emission factors"], ["data", "Energy data"], ["activities", "GHG activities"],
+  ["documents", "Documents"], ["audits", "Audits & reviews"],
 ] as const;
 type Tab = (typeof TABS)[number][0];
 
@@ -69,7 +71,7 @@ export default function EnmsPage() {
 
   return (
     <>
-      <PageHeader title="ISO 50001 energy management" sub="Energy review, SEUs, EnPIs and baselines (ISO 50006), objectives, emission factors and audit records — built on the metered data." />
+      <PageHeader title="ISO 50001 energy management" sub="Energy review, SEUs, EnPIs and baselines (ISO 50006), savings M&V (ISO 50015 / IPMVP), meter calibration, emission factors and audit records — built on the metered data." />
       <div className="mb-4 flex gap-1 overflow-x-auto border-b border-line">
         {TABS.map(([t, label]) => (
           <button key={t} onClick={() => { setError(null); setTab(t); }} className={cx("-mb-px whitespace-nowrap border-b-2 px-4 py-2 text-sm", tab === t ? "border-brand font-medium text-brand" : "border-transparent text-muted hover:text-ink")}>{label}</button>
@@ -81,7 +83,10 @@ export default function EnmsPage() {
         {tab === "review" && <ReviewTab edit={edit} onError={setError} />}
         {tab === "enpis" && <EnpiTab edit={edit} onError={setError} />}
         {tab === "plans" && <PlansTab edit={edit} onError={setError} />}
+        {tab === "mv" && <MvTab edit={edit} onError={setError} />}
+        {tab === "meters" && <MetersTab edit={edit} onError={setError} />}
         {tab === "factors" && <FactorsTab edit={edit} onError={setError} />}
+        {tab === "activities" && <ActivitiesTab edit={edit} onError={setError} />}
         {tab === "data" && <DataTab edit={edit} onError={setError} />}
         {tab === "documents" && <DocumentsTab edit={edit} onError={setError} />}
         {tab === "audits" && <AuditsTab edit={edit} onError={setError} />}
@@ -432,11 +437,22 @@ function PlansTab({ edit, onError }: TabProps) {
 
 // ---------- Emission factors ----------
 type FactorForm = Omit<Factor, "factorId" | "co2e"> & { factorId?: string; co2e?: number };
-const emptyFactor: FactorForm = { source: "electricity", name: "", scope: 2, method: "Market", region: "TW", year: new Date().getFullYear(), unit: "kWh", heatKcalPerUnit: null, co2KgPerTj: null, ch4KgPerTj: null, n2oKgPerTj: null, kgCo2ePerUnit: null, gwpSet: "AR5", reference: "", isActive: true };
+const emptyFactor: FactorForm = { source: "electricity", name: "", scope: 2, method: "Market", region: "TW", year: new Date().getFullYear(), unit: "kWh", heatKcalPerUnit: null, co2KgPerTj: null, ch4KgPerTj: null, n2oKgPerTj: null, kgCo2ePerUnit: null, gwpSet: "AR5", reference: "", isActive: true, scope3Category: null };
+const category = (source: string) => source.startsWith("ref_") ? "refrigerant" : source.startsWith("proc_") ? "process" : source.startsWith("s3_") ? "scope3" : "energy";
+const FACTOR_VIEWS: [string, string][] = [["energy", "Energy"], ["refrigerant", "Refrigerants & SF₆"], ["process", "Process"], ["scope3", "Scope 3"], ["all", "All"]];
 
 function FactorsTab({ edit, onError }: TabProps) {
   const [list, load] = useLoad<Factor[]>("/api/v1/enms/factors", onError);
   const [form, setForm] = useState<FactorForm | null>(null);
+  const [view, setView] = useState("energy");
+  const grid = (list ?? []).filter((f) => f.source === "electricity" && f.method === "Location");
+  const regions = Array.from(new Set(grid.map((f) => f.region))).sort();
+  const activeRegion = grid.find((f) => f.isActive)?.region ?? "TW";
+  const shown = (list ?? []).filter((f) => view === "all" || category(f.source) === view);
+
+  function chooseRegion(region: string) {
+    run(onError, () => api("/api/v1/enms/factors/region", { method: "POST", json: { region } }), load);
+  }
 
   function save() {
     if (!form) return;
@@ -451,15 +467,27 @@ function FactorsTab({ edit, onError }: TabProps) {
       <Card className="mb-4">
         <p className="text-sm">Every factor names its published source. Fuels are computed from the per-TJ factors and the net heat value: kg CO₂e/unit = heat (kcal) × 4.1868×10⁻⁹ TJ/kcal × (CO₂ + CH₄×GWP + N₂O×GWP). Carbon / ESG and the energy review use the factor for the report year; Settings values are only a fallback.</p>
       </Card>
-      <Card title="Emission factor library" actions={edit && <Button className="py-1" onClick={() => setForm({ ...emptyFactor })}><Plus size={14} /> Factor</Button>}>
-        <Table head={["Source", "Name", "Scope", "Method", "Year", "kg CO₂e / unit", "Basis", "Reference", ""]} empty={(list ?? []).length === 0}>
-          {(list ?? []).map((f) => (
+      <Card className="mb-4" title="Grid electricity region (location-based Scope 2)">
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span>In use: <Badge tone="brand">{activeRegion}</Badge></span>
+          {edit && regions.filter((r) => r !== activeRegion).map((r) => <Button key={r} variant="outline" className="py-1" onClick={() => chooseRegion(r)}>Use {r}</Button>)}
+          <span className="text-xs text-muted">Published factors for TW (MOEA), UK (DESNZ 2025), US (EPA eGRID2023) and IN (CEA) are in the library; add your own country&apos;s factor with its source.</span>
+        </div>
+      </Card>
+      <Card title="Emission factor library" actions={
+        <span className="flex gap-2">
+          <Select value={view} onChange={(e) => setView(e.target.value)} className="w-44 py-1" aria-label="Factor type">{FACTOR_VIEWS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Select>
+          {edit && <Button className="py-1" onClick={() => setForm({ ...emptyFactor })}><Plus size={14} /> Factor</Button>}
+        </span>
+      }>
+        <Table head={["Source", "Name", "Scope", "Method", "Region · year", "kg CO₂e / unit", "Basis", "Reference", ""]} empty={shown.length === 0}>
+          {shown.map((f) => (
             <tr key={f.factorId} className={f.isActive ? "" : "opacity-50"}>
               <td className="px-3 py-2">{f.source.replace("_", " ")}</td>
               <td className="px-3 py-2">{f.name}</td>
-              <td className="px-3 py-2">{f.scope}</td>
+              <td className="px-3 py-2">{f.scope}{f.scope3Category ? ` · cat ${f.scope3Category}` : ""}</td>
               <td className="px-3 py-2">{f.method}</td>
-              <td className="px-3 py-2">{f.year}</td>
+              <td className="px-3 py-2 whitespace-nowrap">{f.region} · {f.year}</td>
               <td className="px-3 py-2 tabular-nums font-medium">{f.co2e.toFixed(4)} /{f.unit}</td>
               <td className="px-3 py-2 text-xs text-muted">{f.kgCo2ePerUnit !== null ? "published total" : `${fmt(f.heatKcalPerUnit ?? 0)} kcal · CO₂ ${fmt(f.co2KgPerTj ?? 0)} · CH₄ ${f.ch4KgPerTj} · N₂O ${f.n2oKgPerTj} kg/TJ · ${f.gwpSet}`}</td>
               <td className="max-w-xs px-3 py-2 text-xs text-muted">{f.reference}</td>
@@ -471,10 +499,20 @@ function FactorsTab({ edit, onError }: TabProps) {
       <Modal open={!!form} title={form?.factorId ? "Edit emission factor" : "New emission factor"} onClose={() => setForm(null)} wide>
         {form && (
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Source"><Select value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })}>{SOURCES.filter(([s]) => s !== "green_power").map(([s, l]) => <option key={s} value={s}>{l}</option>)}</Select></Field>
+            <Field label="Type"><Select value={category(form.source)} onChange={(e) => {
+              const c = e.target.value;
+              setForm(c === "energy" ? { ...form, source: "electricity", scope: 2, method: "Market", scope3Category: null }
+                : c === "refrigerant" ? { ...form, source: "ref_", scope: 1, method: "Fugitive", unit: "kg", region: "GLOBAL", scope3Category: null }
+                : c === "process" ? { ...form, source: "proc_", scope: 1, method: "Process", unit: "kg", scope3Category: null }
+                : { ...form, source: "s3_", scope: 3, method: "Activity", scope3Category: 1 });
+            }}><option value="energy">Energy (fuel, electricity, steam)</option><option value="refrigerant">Refrigerant / SF₆ (Scope 1 fugitive)</option><option value="process">Process emissions (Scope 1)</option><option value="scope3">Scope 3 activity</option></Select></Field>
+            {category(form.source) === "energy"
+              ? <Field label="Source"><Select value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })}>{SOURCES.filter(([s]) => s !== "green_power").map(([s, l]) => <option key={s} value={s}>{l}</option>)}</Select></Field>
+              : <Field label="Code" hint="Lower-case letters, digits and _, after the prefix."><Input value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value.toLowerCase() })} /></Field>}
+            {form.scope === 3 && <Field label="Scope 3 category (GHG Protocol)"><Select value={form.scope3Category ?? 1} onChange={(e) => setForm({ ...form, scope3Category: Number(e.target.value) })}>{Array.from({ length: 15 }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}</Select></Field>}
             <Field label="Name"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Supplier-specific green tariff" /></Field>
             <Field label="Scope"><Select value={form.scope} onChange={(e) => setForm({ ...form, scope: Number(e.target.value) })}><option value={1}>1 — direct (fuel burned on site)</option><option value={2}>2 — purchased electricity / steam</option><option value={3}>3 — value chain</option></Select></Field>
-            <Field label="Method"><Select value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })}><option>Combustion</option><option>Location</option><option>Market</option></Select></Field>
+            <Field label="Method"><Select value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })}><option>Combustion</option><option>Location</option><option>Market</option><option>Fugitive</option><option>Process</option><option>Activity</option></Select></Field>
             <Field label="Region"><Input value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} /></Field>
             <Field label="Year"><Input type="number" value={form.year} onChange={(e) => setForm({ ...form, year: Number(e.target.value) })} /></Field>
             <Field label="Unit"><Input value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} placeholder="kWh, Nm3, L, kg" /></Field>

@@ -12,14 +12,26 @@ type Report = {
   scope2Kg: number; avoidedKg: number; totalKg: number; kgPerPart: number | null; parts: number; daily: Day[]; byArea: { meter: string; kg: number }[];
   electricityReference: string | null; gasReference: string | null; scope2MarketKg: number; greenKwh: number; unmeteredKwh: number;
   fuels: { source: string; unit: string; quantity: number; factor: number; kg: number; scope: number; factorName: string | null }[] | null;
+  fugitiveKg: number; processKg: number; scope3Kg: number; gridRegion: string;
+  scope3: { category: number; name: string; kg: number }[] | null;
+  activities: { source: string; name: string; scope: number; scope3Category: number | null; method: string; unit: string; quantity: number; kg: number }[] | null;
 };
+type Material = { itemCode: string; itemName: string; unit: string; qtyPerUnit: number; kgCo2ePerUnit: number | null; kgPerProduct: number; source: string | null };
+type Product = {
+  productId: string; code: string; name: string; orders: number; units: number; massKg: number | null; directKwh: number; overheadKwh: number; electricityKg: number;
+  scope1Kg: number; materialsKg: number; totalKg: number; kgPerUnit: number; kgPerTonne: number | null; electricityKgPerUnit: number; materialsKgPerUnit: number;
+  materialsWithFactor: number; materialsTotal: number; materials: Material[];
+};
+type Footprint = { boundary: string; electricityFactor: number; siteKwh: number; machinesKwh: number; overheadSharePct: number; siteScope1Kg: number; products: Product[]; notes: string[] };
 
 export default function CarbonPage() {
   const [period, setPeriod] = useState("30d");
   const [r, setR] = useState<Report | null>(null);
+  const [fp, setFp] = useState<Footprint | null>(null);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(() => {
     api<Report>(`/api/v1/energy/carbon?${periodQuery(period)}`).then(setR).catch((e) => setError(errorText(e)));
+    api<Footprint>(`/api/v1/energy/carbon/footprint?${periodQuery(period)}`).then(setFp).catch((e) => setError(errorText(e)));
   }, [period]);
   useEffect(load, [load]);
 
@@ -36,7 +48,7 @@ export default function CarbonPage() {
 
   return (
     <>
-      <PageHeader title="Carbon / ESG" sub={r ? `Factors: ${r.electricityFactor} kg CO₂e/kWh grid, ${Number(r.gasFactor).toFixed(3)} kg CO₂e/Nm³ gas — from the factor library (ISO 50001 → Emission factors)` : "Scope 1 and 2 emissions"}
+      <PageHeader title="Carbon / ESG" sub={r ? `Grid region ${r.gridRegion}: ${r.electricityFactor} kg CO₂e/kWh, gas ${Number(r.gasFactor).toFixed(3)} kg CO₂e/Nm³ — from the factor library (ISO 50001 → Emission factors)` : "Scope 1, 2 and 3 emissions"}
         actions={
           <>
             <Select value={period} onChange={(e) => setPeriod(e.target.value)} className="w-40 py-1" aria-label="Period">
@@ -51,7 +63,7 @@ export default function CarbonPage() {
           <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Stat label="Total emissions" value={`${fmt(r.totalKg / 1000)} t CO₂e`} sub={r.kgPerPart ? `${r.kgPerPart} kg per part` : "Scope 1 + 2"} icon={<Leaf size={16} />} />
             <Stat label="Scope 2 (electricity)" value={`${fmt(r.scope2Kg)} kg`} sub={`location-based · market-based ${fmt(r.scope2MarketKg)} kg${r.greenKwh ? ` (${fmt(r.greenKwh)} kWh green power)` : ""}`} icon={<Factory size={16} />} />
-            <Stat label="Scope 1 (fuel)" value={`${fmt(r.scope1Kg)} kg`} sub={`${fmt(r.gasM3)} Nm³ metered gas${r.fuels?.some((f) => f.scope === 1) ? " + fuel deliveries" : ""}`} icon={<Flame size={16} />} />
+            <Stat label="Scope 1 (fuel, refrigerants, process)" value={`${fmt(r.scope1Kg)} kg`} sub={`${fmt(r.gasM3)} Nm³ metered gas${r.fuels?.some((f) => f.scope === 1) ? " + fuel deliveries" : ""}${r.fugitiveKg ? ` · refrigerant ${fmt(r.fugitiveKg)} kg` : ""}${r.processKg ? ` · process ${fmt(r.processKg)} kg` : ""}`} icon={<Flame size={16} />} />
             <Stat label="Avoided by solar" value={`${fmt(r.avoidedKg)} kg`} sub={`${fmt(r.solarKwh)} kWh generated`} icon={<Sun size={16} />} />
           </div>
           <div className="mb-6 grid gap-4 lg:grid-cols-3">
@@ -60,6 +72,25 @@ export default function CarbonPage() {
             </Card>
             <Card title="Scope 2 by area meter">
               <HBars rows={r.byArea.map((a) => ({ label: a.meter, value: a.kg, tone: "ok" as const }))} unit=" kg" />
+            </Card>
+          </div>
+          <div className="mb-6 grid gap-4 lg:grid-cols-2">
+            <Card title={`Scope 3 (value chain) — ${fmt(r.scope3Kg)} kg CO₂e, reported separately`}>
+              {(r.scope3?.length ?? 0) === 0 ? <p className="text-sm text-muted">No Scope 3 activities in this period. Add materials, freight, waste and travel under ISO 50001 → GHG activities.</p> : (
+                <HBars rows={r.scope3!.map((c) => ({ label: `Cat ${c.name}`, value: c.kg, tone: "info" as const }))} unit=" kg" />
+              )}
+            </Card>
+            <Card title="Activity data in this period (refrigerant, process, Scope 3)">
+              <Table head={["Activity", "Scope", "Quantity", "kg CO₂e"]} empty={(r.activities?.length ?? 0) === 0}>
+                {(r.activities ?? []).map((a) => (
+                  <tr key={a.source}>
+                    <td className="px-3 py-2">{a.name}</td>
+                    <td className="px-3 py-2 text-xs">{a.scope}{a.scope3Category ? ` · cat ${a.scope3Category}` : ""} · {a.method}</td>
+                    <td className="px-3 py-2 tabular-nums">{fmt(a.quantity)} {a.unit}</td>
+                    <td className="px-3 py-2 tabular-nums">{fmt(a.kg)}</td>
+                  </tr>
+                ))}
+              </Table>
             </Card>
           </div>
           {(r.fuels?.length ?? 0) > 0 && (
@@ -78,6 +109,25 @@ export default function CarbonPage() {
               </Table>
             </Card>
           )}
+          {fp && (
+            <Card title={`Product carbon footprint — ${fp.boundary}`} className="mb-6">
+              <Table head={["Product", "Orders · units", "Machine kWh", "Site overhead kWh", "Energy kg/unit", "Materials kg/unit", "kg CO₂e / unit", "per tonne"]} empty={fp.products.length === 0}>
+                {fp.products.map((p) => (
+                  <tr key={p.productId}>
+                    <td className="px-3 py-2 font-medium">{p.name}<div className="font-mono text-[11px] text-muted">{p.code}</div></td>
+                    <td className="px-3 py-2 tabular-nums">{p.orders} · {fmt(p.units)}</td>
+                    <td className="px-3 py-2 tabular-nums">{fmt(p.directKwh)}</td>
+                    <td className="px-3 py-2 tabular-nums">{fmt(p.overheadKwh)}</td>
+                    <td className="px-3 py-2 tabular-nums">{p.electricityKgPerUnit.toFixed(4)}</td>
+                    <td className="px-3 py-2 tabular-nums">{p.materialsKgPerUnit.toFixed(4)}<div className="text-[11px] text-muted">{p.materialsWithFactor}/{p.materialsTotal} materials with a factor</div></td>
+                    <td className="px-3 py-2 tabular-nums font-medium">{p.kgPerUnit.toFixed(4)}</td>
+                    <td className="px-3 py-2 tabular-nums">{p.kgPerTonne !== null ? `${fmt(p.kgPerTonne)} kg/t` : <span className="text-xs text-muted">no mass</span>}</td>
+                  </tr>
+                ))}
+              </Table>
+              <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-muted">{fp.notes.map((n) => <li key={n}>{n}</li>)}</ul>
+            </Card>
+          )}
           <Card title="Daily detail">
             <Table head={["Day", "Grid kWh", "Solar kWh", "Gas Nm³", "Scope 1 kg", "Scope 2 kg"]} empty={r.daily.length === 0}>
               {r.daily.map((d) => (
@@ -93,7 +143,7 @@ export default function CarbonPage() {
             </Table>
           </Card>
           <p className="mt-4 text-xs text-muted">
-            Grid: {r.electricityReference ?? "Settings"}. Gas: {r.gasReference ?? "Settings"}. Scope 2 follows the GHG Protocol Scope 2 Guidance (location- and market-based).
+            Grid: {r.electricityReference ?? "Settings"}. Gas: {r.gasReference ?? "Settings"}. Scope 2 follows the GHG Protocol Scope 2 Guidance (location- and market-based); refrigerant losses use AR5 GWPs; Scope 3 is reported separately from the Scope 1 + 2 total, as the GHG Protocol Corporate Standard asks.
           </p>
         </>
       )}
