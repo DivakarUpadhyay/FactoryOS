@@ -195,8 +195,8 @@ function ReviewTab({ edit, onError }: TabProps) {
           <div className="mb-6 grid gap-4 lg:grid-cols-2">
             <Card title="Energy by source (kWh equivalent, net heat value)">
               <Table head={["Source", "Quantity", "kWh eq.", "kg CO₂e", "Factor"]}>
-                {r.sources.map((s) => (
-                  <tr key={s.source}>
+                {r.sources.map((s, i) => (
+                  <tr key={`${s.source}-${s.unit}-${i}`}>
                     <td className="px-3 py-2">{s.source.replace("_", " ")}</td>
                     <td className="px-3 py-2 tabular-nums">{fmt(s.quantity)} {s.unit}</td>
                     <td className="px-3 py-2 tabular-nums">{fmt(s.kwh)}</td>

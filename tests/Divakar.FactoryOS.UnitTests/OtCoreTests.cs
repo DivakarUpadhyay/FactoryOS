@@ -296,6 +296,42 @@ public sealed class OtModelTests
     }
 
     [Fact]
+    public void A_normal_daily_temperature_cycle_is_not_drift()
+    {
+        var now = new DateTime(2026, 11, 4, 3, 0, 0, DateTimeKind.Utc);   // night: the coolest hours
+        double Temp(DateTime t) => 26 + 4 * Math.Sin((t.Hour - 9) / 24.0 * 2 * Math.PI);
+        var hours = new List<AnalogHour>();
+        for (var h = now.AddDays(-7); h < now.AddHours(-2); h = h.AddHours(1))
+        {
+            hours.Add(new AnalogHour(Tenant, Asset, "Hall sensor", Tag, "Temperature", "temperature", "°C", 60, null, h, Temp(h)));
+        }
+        var recent = Enumerable.Range(0, 24).Select(i => now.AddMinutes(-60 + i * 2.5)).Select(t => new RecentValue(Tag, t, Temp(t))).ToLookup(r => r.TagId);
+        Assert.DoesNotContain(OtAiJob.AnalogFindings(hours, recent, now, (_, _) => 1), f => f.Kind == "Drift");
+    }
+
+    [Fact]
+    public void A_machine_switching_between_running_and_idle_is_not_drift()
+    {
+        // spindle bearing at 70 °C while running, 40 °C while idle; it is running now, at its normal running temperature
+        var now = new DateTime(2026, 11, 4, 12, 0, 0, DateTimeKind.Utc);
+        var buckets = new List<AnalogHour>();
+        for (var b = now.AddDays(-7); b < now.AddHours(-2); b = b.AddMinutes(15))
+        {
+            var running = b.Hour is >= 8 and < 20;
+            buckets.Add(new AnalogHour(Tenant, Asset, "CNC 1", Tag, "Bearing temperature", "bearing_temp", "°C", 130, 95, b, running ? 70 + (b.Minute % 30) * 0.01 : 40, running ? 2 : 1));
+        }
+        var recent = Enumerable.Range(0, 24).Select(i => new RecentValue(Tag, now.AddMinutes(-60 + i * 2.5), 70.1 + i % 3 * 0.05)).ToLookup(r => r.TagId);
+        var states = new Dictionary<Guid, AssetState> { [Asset] = new(Asset, 2, now.AddHours(-4)) };
+        Assert.DoesNotContain(OtAiJob.AnalogFindings(buckets, recent, now, (_, _) => 1, states), f => f.Kind == "Drift");
+        // without the state, the same data looks like a big upward drift against the all-day normal
+        var hot = Enumerable.Range(0, 24).Select(i => new RecentValue(Tag, now.AddMinutes(-60 + i * 2.5), 85 + i % 3 * 0.05)).ToLookup(r => r.TagId);
+        Assert.Contains(OtAiJob.AnalogFindings(buckets, hot, now, (_, _) => 1, states), f => f.Kind == "Drift");
+        // and a machine that changed state ten minutes ago is not judged yet
+        states[Asset] = new(Asset, 2, now.AddMinutes(-10));
+        Assert.Empty(OtAiJob.AnalogFindings(buckets, hot, now, (_, _) => 1, states));
+    }
+
+    [Fact]
     public void A_machine_idling_at_high_power_is_waste()
     {
         var now = DateTime.UtcNow;

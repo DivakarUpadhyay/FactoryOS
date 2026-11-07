@@ -84,7 +84,8 @@ public sealed class EdgeWorker(EdgeOptions options, EdgeState state, CloudClient
         {
             try
             {
-                buffer.Roll();
+                // while the cloud is reachable, send every few seconds; while it is not, let segments grow to the roll size or a minute
+                buffer.RollIfOlderThan(backoff > TimeSpan.FromSeconds(2) ? TimeSpan.FromSeconds(60) : TimeSpan.FromSeconds(3));
                 var sent = await buffer.DrainOneAsync(async batch =>
                 {
                     var result = await cloud.UploadAsync(new EdgeUpload(batch, store.TakeHealth()), stop);

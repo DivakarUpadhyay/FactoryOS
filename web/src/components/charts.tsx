@@ -45,8 +45,8 @@ export function HBars({ rows, unit = "", max: forced }: { rows: { label: string;
   const max = forced ?? Math.max(...rows.map((r) => r.value), 0.0001);
   return (
     <div className="space-y-2">
-      {rows.map((r) => (
-        <div key={r.label}>
+      {rows.map((r, i) => (
+        <div key={`${r.label}-${i}`}>
           <div className="flex justify-between gap-2 text-sm">
             <span className="truncate">{r.label}</span>
             <span className="shrink-0 tabular-nums text-muted">{fmt(r.value)}{unit}{r.sub ? ` · ${r.sub}` : ""}</span>

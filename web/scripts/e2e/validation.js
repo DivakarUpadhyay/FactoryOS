@@ -55,7 +55,7 @@ const PAGES = ["/app/dashboards", "/app/plant", "/app/connectivity", "/app/energ
           await page.waitForTimeout(1200);
           const stillOpen = await modal.isVisible().catch(() => false);
           const invalid = await modal.locator("input:invalid, select:invalid, textarea:invalid").count().catch(() => 0);
-          const message = (await page.locator("div.border-bad\\/30, .text-bad").allInnerTexts().catch(() => [])).filter((x) => x.trim()).join(" | ").slice(0, 140);
+          const message = (await page.locator("div.border-bad\\/30, .text-bad").allInnerTexts().catch(() => [])).filter((x) => (x ?? "").trim()).join(" | ").slice(0, 140);
           if (serverErrors.length > before) gaps.push(`${where}: empty "${saveText}" caused a server error`);
           else if (stillOpen && (invalid > 0 || message)) ok.push(`${where}: empty "${saveText}" refused — ${invalid ? `${invalid} required field(s) flagged` : message}`);
           else if (stillOpen) gaps.push(`${where}: empty "${saveText}" did nothing visible (no message)`);

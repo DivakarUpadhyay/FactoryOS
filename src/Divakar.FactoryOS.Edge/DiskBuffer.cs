@@ -69,6 +69,18 @@ public sealed class DiskBuffer
         }
     }
 
+    /// <summary>Closes the open segment once it is at least this old: readings go out promptly without one file every few seconds.</summary>
+    public void RollIfOlderThan(TimeSpan age)
+    {
+        lock (gate)
+        {
+            if (writer is not null && DateTime.UtcNow - openedAt >= age)
+            {
+                RollLocked();
+            }
+        }
+    }
+
     private void RollLocked()
     {
         if (writer is null || current is null)

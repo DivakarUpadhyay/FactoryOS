@@ -23,20 +23,42 @@ public sealed class OtAiStore(Db db) : IOtAiStore
     public async Task<IReadOnlyList<AnalogHour>> AnalogHoursAsync(IReadOnlyCollection<string> sensorTypes, DateTime since, DateTime until, CancellationToken ct)
     {
         await using var con = await db.OpenSystemAsync(ct);
+        // 15-minute averages, each with the machine's state when it held for the whole bucket
         return [.. await con.QueryAsync<AnalogHour>(new CommandDefinition("""
+            WITH st AS (
+                SELECT s.AssetId, DATEADD(MINUTE, DATEDIFF(MINUTE, 0, r.Ts) / 15 * 15, 0) AS B, MIN(r.Value) AS Lo, MAX(r.Value) AS Hi
+                FROM telemetry.Readings r
+                JOIN plant.Tags s ON s.TagId = r.TagId AND s.SensorTypeCode = 'machine_state'
+                WHERE r.Ts >= @since AND r.Ts < @until AND r.Value IS NOT NULL
+                GROUP BY s.AssetId, DATEADD(MINUTE, DATEDIFF(MINUTE, 0, r.Ts) / 15 * 15, 0))
             SELECT t.TenantId, a.AssetId, a.Name AS AssetName, t.TagId, t.Name AS TagName, t.SensorTypeCode, t.Unit, t.MaxValue,
                    (SELECT MIN(r.Threshold) FROM alarms.Rules r
                     WHERE r.TenantId = t.TenantId AND r.IsActive = 1 AND r.SensorTypeCode = t.SensorTypeCode AND r.Operator IN ('>', '>=')
                       AND (r.AssetId = a.AssetId OR (r.AssetId IS NULL AND (r.AssetTypeCode IS NULL OR r.AssetTypeCode = a.AssetTypeCode)))) AS RuleLimit,
-                   x.Hour, x.Avg
+                   CAST(x.B AS datetime2(0)) AS Hour, x.Avg, CASE WHEN st.Lo = st.Hi THEN CAST(st.Lo AS int) END AS State
             FROM plant.Tags t
             JOIN plant.Assets a ON a.AssetId = t.AssetId AND a.IsActive = 1
-            CROSS APPLY (SELECT CAST(DATEADD(HOUR, DATEDIFF(HOUR, 0, r.Ts), 0) AS datetime2(0)) AS Hour, AVG(r.Value) AS Avg
+            CROSS APPLY (SELECT DATEADD(MINUTE, DATEDIFF(MINUTE, 0, r.Ts) / 15 * 15, 0) AS B, AVG(r.Value) AS Avg
                          FROM telemetry.Readings r
                          WHERE r.TagId = t.TagId AND r.Ts >= @since AND r.Ts < @until AND r.Quality <= 1 AND r.Value IS NOT NULL
-                         GROUP BY DATEADD(HOUR, DATEDIFF(HOUR, 0, r.Ts), 0)) x
+                         GROUP BY DATEADD(MINUTE, DATEDIFF(MINUTE, 0, r.Ts) / 15 * 15, 0)) x
+            LEFT JOIN st ON st.AssetId = a.AssetId AND st.B = x.B
             WHERE t.IsActive = 1 AND t.SensorTypeCode IN @sensorTypes
             """, new { sensorTypes, since, until }, commandTimeout: 180, cancellationToken: ct))];
+    }
+
+    public async Task<IReadOnlyList<AssetState>> AssetStatesAsync(DateTime now, CancellationToken ct)
+    {
+        await using var con = await db.OpenSystemAsync(ct);
+        return [.. await con.QueryAsync<AssetState>(new CommandDefinition("""
+            SELECT s.AssetId, CAST(l.Value AS int) AS State,
+                   ISNULL((SELECT MAX(r.Ts) FROM telemetry.Readings r
+                           WHERE r.TagId = s.TagId AND r.Ts >= DATEADD(DAY, -2, @now) AND (r.Value IS NULL OR r.Value <> l.Value)),
+                          DATEADD(DAY, -2, @now)) AS Since
+            FROM plant.Tags s
+            JOIN telemetry.Latest l ON l.TagId = s.TagId AND l.Value IS NOT NULL
+            WHERE s.SensorTypeCode = 'machine_state' AND s.IsActive = 1
+            """, new { now }, commandTimeout: 60, cancellationToken: ct))];
     }
 
     public async Task<IReadOnlyList<RecentValue>> RecentValuesAsync(IReadOnlyCollection<string> sensorTypes, DateTime since, CancellationToken ct)

@@ -18,8 +18,12 @@ public sealed record Tuning(Guid TenantId, Guid TagKey, string Kind, double Sens
 
 public sealed record EnergyHour(Guid TenantId, Guid AssetId, string AssetName, Guid TagId, DateTime Hour, double Rise);
 
+/// <summary>A 15-minute average of an analog tag, with the machine state when it held for the whole bucket (null: no state tag, or it changed).</summary>
 public sealed record AnalogHour(Guid TenantId, Guid AssetId, string AssetName, Guid TagId, string TagName, string SensorTypeCode, string Unit,
-    double? MaxValue, double? RuleLimit, DateTime Hour, double Avg);
+    double? MaxValue, double? RuleLimit, DateTime Hour, double Avg, int? State = null);
+
+/// <summary>A machine's current state (PackML-style value) and since when it has held.</summary>
+public sealed record AssetState(Guid AssetId, int State, DateTime Since);
 
 public sealed record RecentValue(Guid TagId, DateTime Ts, double Value);
 
@@ -35,6 +39,7 @@ public interface IOtAiStore
     Task<IReadOnlyList<EnergyHour>> EnergyHoursAsync(DateTime since, CancellationToken ct);
     Task<IReadOnlyList<AnalogHour>> AnalogHoursAsync(IReadOnlyCollection<string> sensorTypes, DateTime since, DateTime until, CancellationToken ct);
     Task<IReadOnlyList<RecentValue>> RecentValuesAsync(IReadOnlyCollection<string> sensorTypes, DateTime since, CancellationToken ct);
+    Task<IReadOnlyList<AssetState>> AssetStatesAsync(DateTime now, CancellationToken ct);
     Task<IReadOnlyList<IdleCandidate>> IdleCandidatesAsync(DateTime now, CancellationToken ct);
     Task<IReadOnlyList<Tuning>> AllTuningAsync(CancellationToken ct);
     Task<IReadOnlyList<OpenInsight>> OpenInsightsAsync(CancellationToken ct);
@@ -69,6 +74,9 @@ public sealed class OtAiJob(IOtAiStore store)
 
     public const double EnergyZ = 4, EnergyCriticalZ = 8, CusumH = 5;
 
+    /// <summary>Signals that follow the load (current on meters, harmonics, spindle load): a level change is production, not a fault, so no drift check.</summary>
+    public static readonly HashSet<string> LoadFollowing = ["current", "thd_current", "thd_voltage", "spindle_load"];
+
     private static string Json(object o) => JsonSerializer.Serialize(o, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
     public async Task<int> RunOnceAsync(DateTime now, CancellationToken ct)
@@ -80,7 +88,8 @@ public sealed class OtAiJob(IOtAiStore store)
         found.AddRange(EnergyFindings(await store.EnergyHoursAsync(now.AddDays(-28), ct), now, Sens));
         var hours = await store.AnalogHoursAsync(AnalogSensors, now.AddDays(-7), now.AddHours(-2), ct);
         var recent = (await store.RecentValuesAsync(AnalogSensors, now.AddHours(-1), ct)).ToLookup(r => r.TagId);
-        found.AddRange(AnalogFindings(hours, recent, now, Sens));
+        var states = (await store.AssetStatesAsync(now, ct)).ToDictionary(x => x.AssetId);
+        found.AddRange(AnalogFindings(hours, recent, now, Sens, states));
         found.AddRange(IdleFindings(await store.IdleCandidatesAsync(now, ct), now, Sens));
 
         var changes = 0;
@@ -148,7 +157,7 @@ public sealed class OtAiJob(IOtAiStore store)
     }
 
     public static IEnumerable<NewInsight> AnalogFindings(IReadOnlyList<AnalogHour> hours, ILookup<Guid, RecentValue> recent, DateTime now,
-        Func<Guid, string, double> sens)
+        Func<Guid, string, double> sens, IReadOnlyDictionary<Guid, AssetState>? states = null)
     {
         foreach (var g in hours.GroupBy(h => h.TagId))
         {
@@ -160,16 +169,46 @@ public sealed class OtAiJob(IOtAiStore store)
                 continue;
             }
             var avgs = hourly.Select(h => h.Avg).ToList();
-            var mean = OtModels.Median(avgs);
-            var sigma = Math.Max(OtModels.RobustSigma(avgs), Math.Max(1e-3, Math.Abs(mean) * 0.01));
+            List<double> basis;
+            var checkDrift = !LoadFollowing.Contains(first.SensorTypeCode);
+            if (states?.GetValueOrDefault(first.AssetId) is { } st)
+            {
+                // a machine: its signals depend on what it is doing, so compare only with past periods in the same state, and only
+                // once the state has settled (warm-up after a start, cool-down after a stop are not drift)
+                if (now - st.Since < TimeSpan.FromMinutes(30))
+                {
+                    continue;
+                }
+                basis = [.. hourly.Where(h => h.State == st.State).Select(h => h.Avg)];
+                if (basis.Count < 8)
+                {
+                    continue;
+                }
+                values = [.. values.Where(v => v.Ts >= st.Since)];
+                if (values.Count < 6)
+                {
+                    continue;
+                }
+                checkDrift &= st.State == Domain.Plant.MachineStates.Running;
+            }
+            else
+            {
+                // many signals follow the day (room and transformer temperatures, HVAC, THD with the shift pattern): the normal for now
+                // is the same hours of the day over the last week, not the week's overall level
+                var hourNow = now.Hour;
+                var sameHours = hourly.Where(h => Math.Min(Math.Abs(h.Hour.Hour - hourNow), 24 - Math.Abs(h.Hour.Hour - hourNow)) <= 1).Select(h => h.Avg).ToList();
+                basis = sameHours.Count >= 6 ? sameHours : avgs;
+            }
+            var mean = OtModels.Median(basis);
+            var sigma = Math.Max(OtModels.RobustSigma(basis), Math.Max(1e-3, Math.Abs(mean) * 0.01));
             var what = $"{first.TagName} on {first.AssetName}";
 
-            if (OtModels.IsFrozen([.. values.TakeLast(12).Select(v => v.Value)], OtModels.RobustSigma(avgs)))
+            if (OtModels.IsFrozen([.. values.TakeLast(12).Select(v => v.Value)], OtModels.RobustSigma(basis)))
             {
                 yield return new NewInsight(first.TenantId, first.AssetId, first.TagId, "Frozen", "Warning", $"{what} is frozen",
-                    $"The last {Math.Min(12, values.Count)} readings are all {values[^1].Value:0.###} {first.Unit} while this signal normally varies (σ {OtModels.RobustSigma(avgs):0.###}). "
+                    $"The last {Math.Min(12, values.Count)} readings are all {values[^1].Value:0.###} {first.Unit} while this signal normally varies (σ {OtModels.RobustSigma(basis):0.###}). "
                     + "A stuck sensor or a controller holding its last value — check the transmitter and its wiring before trusting this signal.",
-                    12, Json(new { last = values[^1].Value, sigma = OtModels.RobustSigma(avgs) }), "cloud");
+                    12, Json(new { last = values[^1].Value, sigma = OtModels.RobustSigma(basis) }), "cloud");
                 continue;
             }
 
@@ -180,12 +219,13 @@ public sealed class OtAiJob(IOtAiStore store)
             var ewma = OtModels.Ewma(buckets, mean);
             var limit = OtModels.Tuned(OtModels.EwmaLimit(sigma), s);
             var (hi, lo) = OtModels.Cusum(buckets, mean, sigma);
-            if (Math.Abs(ewma - mean) > limit && Math.Max(hi, lo) > OtModels.Tuned(CusumH, s))
+            // a statistically clear shift that is also big enough to matter on the floor (at least 5 % of the normal level)
+            if (checkDrift && Math.Abs(ewma - mean) > Math.Max(limit, OtModels.Tuned(0.05, s) * Math.Abs(mean)) && Math.Max(hi, lo) > OtModels.Tuned(CusumH, s))
             {
                 var up = ewma > mean;
                 yield return new NewInsight(first.TenantId, first.AssetId, first.TagId, "Drift", Math.Abs(ewma - mean) > 2 * limit ? "Critical" : "Warning",
                     $"{what} is drifting {(up ? "up" : "down")}",
-                    $"Running average {ewma:0.##} {first.Unit} against a normal {mean:0.##} {first.Unit} for the last week (EWMA limit ±{limit:0.##}, CUSUM {Math.Max(hi, lo):0.0}σ). "
+                    $"Running average {ewma:0.##} {first.Unit} against a normal {mean:0.##} {first.Unit} {(states?.ContainsKey(first.AssetId) == true ? "while running" : "at this time of day")} over the last week (EWMA limit ±{limit:0.##}, CUSUM {Math.Max(hi, lo):0.0}σ). "
                     + (first.SensorTypeCode.StartsWith("vibration", StringComparison.Ordinal) ? "Rising vibration points to bearing wear, imbalance or looseness."
                         : first.SensorTypeCode.Contains("temp") ? "Rising temperature points to lubrication, cooling or overload problems." : "Check the process and the sensor."),
                     Math.Round(Math.Max(hi, lo), 2), Json(new { ewma, mean, sigma, limit, cusum = Math.Max(hi, lo) }), "cloud");
@@ -193,10 +233,11 @@ public sealed class OtAiJob(IOtAiStore store)
 
             // time to limit: trend of the last 72 h of hourly averages plus the recent 5-minute means
             var cap = first.RuleLimit ?? first.MaxValue;
-            if (cap is { } top && top > mean)
+            if (checkDrift && cap is { } top && top > mean)
             {
                 var since = now.AddHours(-72);
-                var pts = hourly.Where(h => h.Hour >= since).Select(h => ((h.Hour - now).TotalHours + 0.5, h.Avg))
+                var pts = hourly.Where(h => h.Hour >= since && (states?.GetValueOrDefault(first.AssetId) is not { } st2 || h.State == st2.State))
+                    .Select(h => ((h.Hour - now).TotalHours + 0.125, h.Avg))
                     .Concat(values.Select(v => ((v.Ts - now).TotalHours, v.Value))).ToList();
                 if (OtModels.HoursToLimit(pts, top, 0) is { } hoursLeft && hoursLeft <= 168 / sens(first.TagId, "TimeToLimit"))
                 {

@@ -13,7 +13,7 @@ let where = "";
 const check = (ok, what) => (ok ? passed : problems).push(`${where}: ${what}`);
 
 const APP = ["/app", "/app/dashboards", "/app/assistant", "/app/plant", "/app/floor", "/app/twin", "/app/connectivity", "/app/energy", "/app/power",
-  "/app/carbon", "/app/enms", "/app/production", "/op", "/app/robotics", "/app/maintenance", "/app/alarms", "/app/quality", "/app/inventory",
+  "/app/carbon", "/app/enms", "/app/production", "/op", "/app/robotics", "/app/maintenance", "/app/alarms", "/app/ai", "/app/quality", "/app/inventory",
   "/app/reports", "/app/users", "/app/roles", "/app/audit", "/app/settings", "/app/account", "/app/security"];
 const PLATFORM = ["/platform", "/platform/tenants", "/platform/plans", "/platform/billing", "/platform/audit", "/platform/security"];
 
@@ -79,6 +79,7 @@ async function enmsFlows(page) {
   await page.goto(`${SITE}/app/enms`, { waitUntil: "networkidle" });
 
   where = "admin ISO 50001 overview";
+  await page.locator("td.font-mono", { hasText: "10.2" }).waitFor({ timeout: 30000 }).catch(() => {});
   const readiness = await page.getByText("EnMS readiness").count();
   const clauses = await page.locator("td.font-mono").allInnerTexts();
   check(readiness === 1 && clauses.includes("5.2") && clauses.includes("10.2"), `readiness ring + ${clauses.length} clauses (4.1–10.2)`);
@@ -156,16 +157,87 @@ async function enmsFlows(page) {
   check(await page.getByText(/2\.68\d\d \/L/).count() >= 1, "diesel factor ≈ 2.686 kg/L computed from kg/TJ × heat value");
 }
 
-(async () => {
-  const browser = await chromium.launch({ channel: "chrome", headless: false, slowMo: 40 });
+async function otFlows(page) {
+  const tab = async (name) => {
+    await page.locator("button.-mb-px", { hasText: name }).click();
+    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.waitForTimeout(700);
+  };
+  where = "admin ISO 50001 meters & calibration (9.1)";
+  await page.goto(`${SITE}/app/enms`, { waitUntil: "networkidle" });
+  await tab("Meters & calibration");
+  const meterRows = page.locator("tr", { hasText: "DV-" });
+  check(await meterRows.count() >= 10, `meter register lists ${await meterRows.count()} meters with serial numbers`);
+  check(await page.getByText("calibrated", { exact: true }).count() >= 1, "calibration state shown");
+  await meterRows.first().click();
+  await page.waitForTimeout(1000);
+  check(await page.getByText(/CAL-20\d\d-/).count() >= 1, "calibration certificate shown for the selected meter");
 
-  const op = await session(browser, "upadhyaydivakar1991@gmail.com", pw("upadhyaydivakar1991@gmail.com"), "/platform");
-  for (const p of PLATFORM) await visit(op.page, p, "operator");
-  await op.ctx.close();
+  where = "admin ISO 50001 savings M&V";
+  await tab("Savings M&V");
+  check(await page.locator("tr", { hasText: "IPMVP" }).count() >= 3, "three M&V plans (A, B, C) listed");
+  await page.locator("tr", { hasText: "IPMVP C" }).first().click();
+  await page.waitForTimeout(1500);
+  check(await page.getByText("Model CV(RMSE).").count() === 1 && await page.getByText(/ASHRAE 14/).count() >= 1, "option C shows ASHRAE Guideline 14 checks");
+  await page.locator("tr", { hasText: "IPMVP A" }).first().click();
+  await page.waitForTimeout(1200);
+  check(await page.getByText("Documented savings.").count() === 1, "option A shows the documented savings");
+
+  where = "admin ISO 50001 emission factors (regions, refrigerants)";
+  await tab("Emission factors");
+  check(await page.getByText("In use:").count() === 1 && await page.getByRole("button", { name: "Use UK" }).count() === 1, "grid region card with other regions offered");
+  await page.getByLabel("Factor type").selectOption("refrigerant");
+  await page.waitForTimeout(400);
+  check(await page.getByText("R-410A blend").count() === 1 && await page.getByText("1924.0000 /kg").count() === 1, "R-410A listed with GWP 1,924");
+  await page.getByLabel("Factor type").selectOption("scope3");
+  await page.waitForTimeout(400);
+  check(await page.getByText("Road freight, HGV average laden").count() === 1, "Scope 3 factors listed");
+
+  where = "admin ISO 50001 GHG activities";
+  await tab("GHG activities");
+  await page.getByRole("button", { name: "Activity", exact: true }).click();
+  const ref = page.locator("div.fixed select").first();
+  const value = await ref.locator("option", { hasText: "R-410A blend" }).getAttribute("value");
+  await ref.selectOption(value);
+  await page.locator("div.fixed").getByLabel(/^Quantity/).fill("1");
+  await page.locator("div.fixed").getByLabel(/^Reference/).fill("E2E-R410A");
+  await modalSave(page);
+  check(await page.getByText("E2E-R410A").count() === 1, "refrigerant top-up recorded (1 kg R-410A)");
+  await page.locator("tr", { hasText: "E2E-R410A" }).getByRole("button", { name: "Delete" }).click();
+  await page.waitForTimeout(800);
+  check(await page.getByText("E2E-R410A").count() === 0, "activity deleted");
+
+  where = "admin carbon (Scope 3, footprint)";
+  await page.goto(`${SITE}/app/carbon`, { waitUntil: "networkidle" });
+  await page.getByText(/Product carbon footprint/).waitFor({ timeout: 30000 }).catch(() => {});
+  check(await page.getByText(/Scope 3 \(value chain\)/).count() === 1, "Scope 3 card shown");
+  check(await page.getByText(/Product carbon footprint/).count() === 1, "product carbon footprint card shown");
+
+  where = "admin OT AI insights";
+  await page.goto(`${SITE}/app/ai`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(1000);
+  check(await page.getByText("Open insights").count() === 1, "insights page with summary");
+
+  where = "admin connectivity edge agents";
+  await page.goto(`${SITE}/app/connectivity`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(1500);
+  check(await page.getByText("Machining hall gateway").count() === 1, "edge agent listed");
+  check(await page.locator("tr", { hasText: "Machining hall gateway" }).getByText("online").count() === 1, "edge agent online");
+}
+
+(async () => {
+  const browser = await chromium.launch({ channel: "chrome", headless: process.env.HEADLESS === "1", slowMo: 40 });
+
+  if (process.env.SKIP_OPERATOR !== "1") {
+    const op = await session(browser, "upadhyaydivakar1991@gmail.com", pw("upadhyaydivakar1991@gmail.com"), "/platform");
+    for (const p of PLATFORM) await visit(op.page, p, "operator");
+    await op.ctx.close();
+  }
 
   const admin = await session(browser, "admin@divakar-demo.local", pw("admin@divakar-demo.local"), "/app");
   for (const p of APP) await visit(admin.page, p, "admin");
   await enmsFlows(admin.page);
+  await otFlows(admin.page);
   where = "admin /op → Main app";
   await admin.page.goto(`${SITE}/op`, { waitUntil: "networkidle" });
   await admin.page.getByText("Main app").click();
@@ -173,7 +245,9 @@ async function enmsFlows(page) {
   await admin.ctx.close();
 
   const viewer = await session(browser, "demo@divakar-demo.local", "FactoryDemo@2026", "/app");
-  for (const p of ["/app", "/app/energy", "/app/carbon", "/app/enms"]) await visit(viewer.page, p, "viewer");
+  for (const p of ["/app", "/app/energy", "/app/carbon", "/app/enms", "/app/ai", "/app/connectivity"]) await visit(viewer.page, p, "viewer");
+  where = "viewer edge agents read-only";
+  check(await viewer.page.getByRole("button", { name: "Agent", exact: true }).count() === 0, "no edge agent buttons for a viewer");
   where = "viewer ISO 50001 read-only";
   await viewer.page.goto(`${SITE}/app/enms`, { waitUntil: "networkidle" });
   await viewer.page.locator("button.-mb-px", { hasText: "Documents" }).click();

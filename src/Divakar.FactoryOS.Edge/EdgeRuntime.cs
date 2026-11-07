@@ -57,13 +57,16 @@ public sealed class EdgeStore(EdgeState state, DiskBuffer buffer, EdgeAi ai, Uns
 }
 
 /// <summary>
-/// The OT detectors next to the machines: a streaming model per analog tag (spikes, drift, frozen values), so a problem is seen
-/// within seconds even when the link to the cloud is down. Findings are queued and sent; one per tag and kind every 15 minutes.
+/// The OT detectors next to the machines: a streaming model per analog tag and machine state (spikes, drift, frozen values), so a
+/// problem is seen within seconds even when the link to the cloud is down. A machine's signals are learnt separately for each state
+/// (running, idle…) and not scored for two minutes after a state change, so starting and stopping is never mistaken for a fault.
+/// Findings are queued and sent; one per tag and kind every 15 minutes.
 /// </summary>
 public sealed class EdgeAi(EdgeState state, EdgeOptions options)
 {
     private static readonly HashSet<string> Analog = [.. OtAiJob.AnalogSensors, "active_power", "voltage_ln", "frequency", "power_factor"];
-    private readonly ConcurrentDictionary<Guid, OnlineDetector> models = new();
+    private readonly ConcurrentDictionary<(Guid Tag, int State), OnlineDetector> models = new();
+    private readonly ConcurrentDictionary<Guid, (int State, DateTime Since)> states = new();
     private readonly ConcurrentDictionary<(Guid, string), DateTime> lastSent = new();
     private readonly ConcurrentQueue<EdgeInsight> queue = new();
 
@@ -76,14 +79,36 @@ public sealed class EdgeAi(EdgeState state, EdgeOptions options)
             return;
         }
         var tags = config.Assets.SelectMany(a => a.Tags.Select(t => (Asset: a, Tag: t))).ToDictionary(x => x.Tag.TagId);
+        foreach (var r in rows.OrderBy(r => r.Ts))
+        {
+            if (r.Value is { } sv && tags.TryGetValue(r.TagId, out var sx) && sx.Tag.SensorTypeCode == "machine_state"
+                && (!states.TryGetValue(sx.Asset.AssetId, out var old) || old.State != (int)sv))
+            {
+                states[sx.Asset.AssetId] = ((int)sv, r.Ts);
+            }
+        }
         foreach (var r in rows)
         {
             if (r.Value is not { } v || r.Quality > 1 || !tags.TryGetValue(r.TagId, out var x) || !Analog.Contains(x.Tag.SensorTypeCode))
             {
                 continue;
             }
-            foreach (var f in models.GetOrAdd(r.TagId, _ => new OnlineDetector()).Add(v))
+            var hasState = x.Asset.Tags.Any(t => t.SensorTypeCode == "machine_state");
+            var state = -1;
+            if (hasState)
             {
+                if (!states.TryGetValue(x.Asset.AssetId, out var st) || r.Ts - st.Since < TimeSpan.FromMinutes(2))
+                {
+                    continue;   // state unknown yet, or just changed: transients are not learnt or scored
+                }
+                state = st.State;
+            }
+            foreach (var f in models.GetOrAdd((r.TagId, state), _ => new OnlineDetector()).Add(v))
+            {
+                if (f.Kind == "Drift" && (OtAiJob.LoadFollowing.Contains(x.Tag.SensorTypeCode) || x.Tag.SensorTypeCode == "active_power"))
+                {
+                    continue;   // power and load follow the machining program: a level change is not a fault
+                }
                 var key = (r.TagId, f.Kind);
                 if (lastSent.TryGetValue(key, out var at) && r.Ts - at < TimeSpan.FromMinutes(15))
                 {
