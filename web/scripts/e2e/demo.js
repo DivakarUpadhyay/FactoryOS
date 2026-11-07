@@ -4,7 +4,7 @@
 const { chromium } = require(process.env.PLAYWRIGHT_PATH);
 const SITE = process.argv[2] || "http://localhost:3123";
 const PAGES = ["/app", "/app/dashboards", "/app/assistant", "/app/plant", "/app/floor", "/app/twin", "/app/connectivity", "/app/energy", "/app/power",
-  "/app/carbon", "/app/enms", "/app/production", "/op", "/app/robotics", "/app/maintenance", "/app/alarms", "/app/quality", "/app/inventory",
+  "/app/carbon", "/app/enms", "/app/production", "/op", "/app/robotics", "/app/maintenance", "/app/alarms", "/app/ai", "/app/quality", "/app/inventory",
   "/app/reports", "/app/settings", "/app/account", "/app/security"];
 
 (async () => {

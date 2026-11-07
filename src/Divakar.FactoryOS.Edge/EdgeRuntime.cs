@@ -97,17 +97,20 @@ public sealed class EdgeAi(EdgeState state, EdgeOptions options)
             var state = -1;
             if (hasState)
             {
-                if (!states.TryGetValue(x.Asset.AssetId, out var st) || r.Ts - st.Since < TimeSpan.FromMinutes(2))
+                // state unknown yet, or just changed: transients are not learnt or scored (temperatures take far longer to settle)
+                var settle = x.Tag.SensorTypeCode.Contains("temp", StringComparison.Ordinal) ? TimeSpan.FromMinutes(15) : TimeSpan.FromMinutes(2);
+                if (!states.TryGetValue(x.Asset.AssetId, out var st) || r.Ts - st.Since < settle)
                 {
-                    continue;   // state unknown yet, or just changed: transients are not learnt or scored
+                    continue;
                 }
                 state = st.State;
             }
             foreach (var f in models.GetOrAdd((r.TagId, state), _ => new OnlineDetector()).Add(v))
             {
-                if (f.Kind == "Drift" && (OtAiJob.LoadFollowing.Contains(x.Tag.SensorTypeCode) || x.Tag.SensorTypeCode == "active_power"))
+                if (f.Kind == "Drift" && (OtAiJob.LoadFollowing.Contains(x.Tag.SensorTypeCode) || x.Tag.SensorTypeCode == "active_power"
+                    || (state >= 0 && state != Domain.Plant.MachineStates.Running)))
                 {
-                    continue;   // power and load follow the machining program: a level change is not a fault
+                    continue;   // power and load follow the program; drift is judged while running, as in the cloud
                 }
                 var key = (r.TagId, f.Kind);
                 if (lastSent.TryGetValue(key, out var at) && r.Ts - at < TimeSpan.FromMinutes(15))
