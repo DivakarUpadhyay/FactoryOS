@@ -34,7 +34,8 @@ let apiHost = null;
   await page.fill('input[type="email"]', "demo@divakar-demo.local");
   await page.fill('input[type="password"]', "FactoryDemo@2026");
   await page.locator('button[type="submit"]').first().click();
-  await page.waitForURL(/\/app/, { timeout: 180000 });
+  // the app signs in with a client-side route change, so watch the address rather than wait for a page load
+  for (let i = 0; i < 180 && !page.url().includes("/app"); i++) await page.waitForTimeout(1000);
   await page.waitForTimeout(3000);
 
   const paths = ["/app", "/app/plant", "/app/floor", "/app/connectivity", "/app/energy", "/app/power", "/app/carbon",
@@ -61,27 +62,24 @@ let apiHost = null;
 
   for (const p of paths) await visit(p);
 
-  // ISO 50001: every EnPI's results
-  await page.goto(`${SITE}/app/enms`, { waitUntil: "networkidle" }).catch(() => {});
-  await page.locator("button.-mb-px", { hasText: "EnPIs" }).click().catch(() => {});
-  await page.waitForLoadState("networkidle").catch(() => {});
-  const enpiRows = page.locator("tr.cursor-pointer");
-  for (let i = 0; i < await enpiRows.count(); i++) {
-    await enpiRows.nth(i).click().catch(() => {});
-    await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => {});
+  // Views the pages open on demand (one per machine, EnPI or lot), fetched straight from the API as the demo viewer
+  const login = await (await fetch(`${apiHost}/api/v1/auth/login`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "demo@divakar-demo.local", password: "FactoryDemo@2026" }),
+  })).json();
+  async function grab(path) {
+    const r = await fetch(`${apiHost}${path}`, { headers: { Authorization: `Bearer ${login.accessToken}` } });
+    const body = await r.text();
+    responses[`GET ${path}`] = { status: r.status, type: r.headers.get("content-type") || "application/json", body };
+    return r.ok && body ? JSON.parse(body) : null;
   }
-  console.log(`${await enpiRows.count()} EnPIs`);
-
-  // inventory: scan every lot, which records its lookup and traceability
-  const lotList = Object.entries(responses).find(([k]) => k === "GET /api/v1/inventory/lots");
-  const lotNos = lotList ? JSON.parse(lotList[1].body).map((l) => l.lotNo) : [];
-  for (const lotNo of lotNos) {
-    await page.goto(`${SITE}/app/inventory`, { waitUntil: "networkidle" }).catch(() => {});
-    await page.getByLabel("Scan", { exact: true }).fill(lotNo);
-    await page.getByRole("button", { name: "Look up" }).click();
-    await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => {});
-  }
-  console.log(`${lotNos.length} lots traced`);
+  const body = (key) => (responses[key]?.body ? JSON.parse(responses[key].body) : null);
+  const home = body("GET /api/v1/production/operator") ?? (await grab("/api/v1/production/operator"));
+  for (const m of home?.machines ?? []) await grab(`/api/v1/production/operator/entries?assetId=${m.assetId}`);
+  for (const e of body("GET /api/v1/enms/enpis") ?? []) await grab(`/api/v1/enms/enpis/${e.enpiId}/results`);
+  const lotNos = (body("GET /api/v1/inventory/lots") ?? []).map((l) => l.lotNo);
+  for (const lotNo of lotNos) await grab(`/api/v1/trace?lot=${encodeURIComponent(lotNo)}`);
+  console.log(`extras: ${(home?.machines ?? []).length} machines, ${(body("GET /api/v1/enms/enpis") ?? []).length} EnPIs, ${lotNos.length} lot traces`);
 
   // every asset's detail page
   const list = Object.entries(responses).find(([k]) => /^GET \/api\/v1\/plant\/floor$/.test(k));
