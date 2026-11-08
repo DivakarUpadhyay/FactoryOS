@@ -4,7 +4,7 @@ const fs = require("fs");
 const SITE = process.argv[3] || "http://localhost:3000";
 const pw = fs.readFileSync(process.argv[2], "utf8").split("admin@divakar-demo.local")[1].match(/Password:\s*(\S+)/)[1];
 const PAGES = ["/app", "/app/dashboards", "/app/assistant", "/app/plant", "/app/floor", "/app/twin", "/app/connectivity", "/app/energy", "/app/power",
-  "/app/carbon", "/app/enms", "/app/production", "/op", "/app/robotics", "/app/maintenance", "/app/alarms", "/app/ai", "/app/quality", "/app/inventory",
+  "/app/carbon", "/app/enms", "/app/production", "/op", "/app/robotics", "/app/maintenance", "/app/alarms", "/app/ai", "/app/workflows", "/app/quality", "/app/inventory",
   "/app/reports", "/app/users", "/app/roles", "/app/audit", "/app/settings", "/app/account", "/app/security"];
 const WIDTHS = [390, 768, 1366];
 const shots = process.env.SHOTS;

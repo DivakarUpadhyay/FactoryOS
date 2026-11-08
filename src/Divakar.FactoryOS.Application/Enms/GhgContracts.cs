@@ -19,9 +19,9 @@ public sealed record FootprintOrder(Guid WorkOrderId, string Code, Guid ProductI
     string AssetName, DateTime ActualStart, DateTime ActualEnd, int GoodQty, double Kwh);
 
 public sealed record BomMaterial(Guid ProductId, string ItemCode, string ItemName, string Unit, decimal QtyPer, decimal ScrapPct, decimal? KgCo2ePerUnit,
-    string? Co2eSource);
+    string? Co2eSource, Guid ItemId);
 
-public sealed record MaterialFootprint(string ItemCode, string ItemName, string Unit, double QtyPerUnit, double? KgCo2ePerUnit, double KgPerProduct, string? Source);
+public sealed record MaterialFootprint(string ItemCode, string ItemName, string Unit, double QtyPerUnit, double? KgCo2ePerUnit, double KgPerProduct, string? Source, Guid ItemId);
 
 public sealed record ProductFootprint(Guid ProductId, string Code, string Name, int Orders, int Units, decimal? MassKg, double DirectKwh, double OverheadKwh,
     double ElectricityKg, double Scope1Kg, double MaterialsKg, double TotalKg, double KgPerUnit, double? KgPerTonne, double ElectricityKgPerUnit,

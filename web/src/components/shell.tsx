@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import {
   Activity, AlertTriangle, Bot, Box, Boxes, Building2, Cable, ClipboardCheck, CreditCard, Factory, FileBarChart, Gauge, LayoutDashboard, LayoutGrid, Leaf,
   LogOut, Map as MapIcon, Menu, Receipt, ScrollText, Settings2, ShieldCheck, Sparkles, SunMoon, Users, Wrench, Zap,
-  Smartphone, BadgeCheck, BrainCircuit,
+  Smartphone, BadgeCheck, BrainCircuit, Workflow,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { AlarmBell } from "./alarm-bell";
@@ -27,6 +27,7 @@ export const platformNav: NavItem[] = [
 
 export const appNav: NavItem[] = [
   { href: "/app", label: "Overview", icon: LayoutDashboard },
+  { href: "/app/workflows", label: "Workflows", icon: Workflow, permission: "plant.read" },
   { href: "/app/dashboards", label: "My dashboards", icon: LayoutGrid, permission: "plant.read" },
   { href: "/app/assistant", label: "AI assistant", icon: Sparkles, permission: "plant.read" },
   { href: "/app/plant", label: "Plant & assets", icon: Factory, permission: "plant.read", module: "plant" },

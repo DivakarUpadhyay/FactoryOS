@@ -13,7 +13,7 @@ let where = "";
 const check = (ok, what) => (ok ? passed : problems).push(`${where}: ${what}`);
 
 const APP = ["/app", "/app/dashboards", "/app/assistant", "/app/plant", "/app/floor", "/app/twin", "/app/connectivity", "/app/energy", "/app/power",
-  "/app/carbon", "/app/enms", "/app/production", "/op", "/app/robotics", "/app/maintenance", "/app/alarms", "/app/ai", "/app/quality", "/app/inventory",
+  "/app/carbon", "/app/enms", "/app/production", "/op", "/app/robotics", "/app/maintenance", "/app/alarms", "/app/ai", "/app/workflows", "/app/quality", "/app/inventory",
   "/app/reports", "/app/users", "/app/roles", "/app/audit", "/app/settings", "/app/account", "/app/security"];
 const PLATFORM = ["/platform", "/platform/tenants", "/platform/plans", "/platform/billing", "/platform/audit", "/platform/security"];
 
@@ -212,6 +212,47 @@ async function otFlows(page) {
   await page.getByText(/Product carbon footprint/).waitFor({ timeout: 30000 }).catch(() => {});
   check(await page.getByText(/Scope 3 \(value chain\)/).count() === 1, "Scope 3 card shown");
   check(await page.getByText(/Product carbon footprint/).count() === 1, "product carbon footprint card shown");
+  const fpRow = page.locator("tr", { has: page.getByRole("button", { name: /^Edit footprint data for / }) }).first();
+  check(await fpRow.count() === 1, "footprint row has an edit button");
+  if (await fpRow.count() === 1) {
+    await fpRow.getByRole("button", { name: /^Edit footprint data for / }).click();
+    const mass = (0.2 + Math.round(Math.random() * 100) / 1000).toFixed(3);
+    await page.locator("div.fixed").getByLabel(/^Mass of one unit/).fill(mass);
+    const factor = page.locator("div.fixed").getByLabel(/^Factor for /).first();
+    const hasMaterial = await factor.count() === 1;
+    if (hasMaterial) {
+      await factor.fill("2.5");
+      await page.locator("div.fixed").getByLabel(/^Source for /).first().fill("E2E supplier EPD 2025");
+    }
+    await modalSave(page);
+    await page.waitForTimeout(1500);
+    check(await page.getByText(/^Footprint data — /).count() === 0, "footprint data saved (dialog closed)");
+    check(await fpRow.getByText(/kg\/t$/).count() === 1, "footprint per tonne shown");
+    await fpRow.getByRole("button", { name: /^Edit footprint data for / }).click();
+    check(await page.locator("div.fixed").getByLabel(/^Mass of one unit/).inputValue() === String(Number(mass)), `unit mass ${mass} kg reloaded from the server`);
+    if (hasMaterial) check(await page.locator("div.fixed").getByLabel(/^Source for /).first().inputValue() === "E2E supplier EPD 2025", "material factor and source reloaded");
+    if (hasMaterial) {
+      // the test factor is not real data: clear it again so it never reaches a recorded demo
+      await page.locator("div.fixed").getByLabel(/^Factor for /).first().fill("");
+      await modalSave(page);
+      await page.waitForTimeout(1200);
+      check(await page.getByText(/^Footprint data — /).count() === 0, "material factor cleared again");
+    } else {
+      await page.locator("div.fixed").getByRole("button", { name: "Cancel" }).click();
+    }
+  }
+
+  where = "admin workflows";
+  await page.goto(`${SITE}/app/workflows`, { waitUntil: "networkidle" });
+  const flows = page.locator('nav[aria-label="Workflows"] button');
+  check(await flows.count() >= 12, `${await flows.count()} workflows listed`);
+  await flows.filter({ hasText: "Alarm to repair" }).click();
+  check(await page.locator("ol > li").count() === 6, "alarm-to-repair shows its 6 steps");
+  await page.getByLabel("Search workflows").fill("calibration");
+  check(await flows.count() === 1 && await flows.first().textContent().then((t) => t.includes("ISO 50001")), "search finds the ISO 50001 cycle");
+  await page.locator("ol > li").getByRole("link", { name: /Meters & calibration/ }).click();
+  await page.waitForURL(/\/app\/enms/);
+  check(page.url().endsWith("/app/enms"), "step link opens the EnMS page");
 
   where = "admin OT AI insights";
   await page.goto(`${SITE}/app/ai`, { waitUntil: "networkidle" });
@@ -248,6 +289,13 @@ async function otFlows(page) {
   for (const p of ["/app", "/app/energy", "/app/carbon", "/app/enms", "/app/ai", "/app/connectivity"]) await visit(viewer.page, p, "viewer");
   where = "viewer edge agents read-only";
   check(await viewer.page.getByRole("button", { name: "Agent", exact: true }).count() === 0, "no edge agent buttons for a viewer");
+  where = "viewer workflows and footprint";
+  await viewer.page.goto(`${SITE}/app/workflows`, { waitUntil: "networkidle" });
+  const vf = await viewer.page.locator('nav[aria-label="Workflows"] button').count();
+  check(vf > 0 && await viewer.page.getByText("not in your role").count() > 0, `viewer sees ${vf} workflows with steps outside the role marked`);
+  await viewer.page.goto(`${SITE}/app/carbon`, { waitUntil: "networkidle" });
+  await viewer.page.waitForTimeout(1200);
+  check(await viewer.page.getByRole("button", { name: /^Edit footprint data for / }).count() === 0, "no footprint edit button for a viewer");
   where = "viewer ISO 50001 read-only";
   await viewer.page.goto(`${SITE}/app/enms`, { waitUntil: "networkidle" });
   await viewer.page.locator("button.-mb-px", { hasText: "Documents" }).click();

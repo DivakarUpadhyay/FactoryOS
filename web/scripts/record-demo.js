@@ -41,7 +41,7 @@ let apiHost = null;
   const paths = ["/app", "/app/plant", "/app/floor", "/app/connectivity", "/app/energy", "/app/power", "/app/carbon",
     "/app/production", "/app/robotics", "/app/maintenance", "/app/alarms", "/app/quality", "/app/inventory",
     "/app/reports", "/app/dashboards", "/app/twin", "/app/assistant", "/app/audit", "/app/users", "/app/roles",
-    "/app/security", "/app/settings", "/app/account", "/op", "/app/enms", "/app/ai"];
+    "/app/security", "/app/settings", "/app/account", "/op", "/app/enms", "/app/ai", "/app/workflows"];
 
   async function visit(p) {
     try {

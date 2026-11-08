@@ -82,7 +82,7 @@ public sealed class GhgRepository(Db db) : IGhgRepository
         }
         await using var con = await db.OpenAsync(ct);
         return [.. await con.QueryAsync<BomMaterial>(new CommandDefinition("""
-            SELECT b.ProductId, i.Code AS ItemCode, i.Name AS ItemName, i.Unit, b.QtyPer, b.ScrapPct, i.KgCo2ePerUnit, i.Co2eSource
+            SELECT b.ProductId, i.Code AS ItemCode, i.Name AS ItemName, i.Unit, b.QtyPer, b.ScrapPct, i.KgCo2ePerUnit, i.Co2eSource, i.ItemId
             FROM production.BomLines b
             JOIN inventory.Items i ON i.ItemId = b.ItemId
             WHERE b.TenantId = @tenantId AND b.ProductId IN @productIds

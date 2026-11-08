@@ -373,7 +373,7 @@ public sealed class EnergyService(IEnergyRepository repo, SettingsService settin
             {
                 var qty = (double)(m.QtyPer * (1 + m.ScrapPct / 100));
                 return new MaterialFootprint(m.ItemCode, m.ItemName, m.Unit, Math.Round(qty, 5), m.KgCo2ePerUnit is { } k ? (double)k : null,
-                    m.KgCo2ePerUnit is { } kg ? Math.Round(qty * (double)kg, 4) : 0, m.Co2eSource);
+                    m.KgCo2ePerUnit is { } kg ? Math.Round(qty * (double)kg, 4) : 0, m.Co2eSource, m.ItemId);
             }).ToList();
             var matPerUnit = mats.Sum(m => m.KgPerProduct);
             var energyPerUnit = units > 0 ? (elecKg + s1) / units : 0;
