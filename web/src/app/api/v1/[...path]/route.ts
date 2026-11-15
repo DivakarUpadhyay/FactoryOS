@@ -54,11 +54,11 @@ const problem = (status: number, detail: string) => Response.json({ status, deta
 
 /** The demo's live feed: every tag's last recorded value, which the browser varies a little to look live. */
 function liveSeed() {
-  const seed: { assetId: string; tagId: string; sensorTypeCode: string; value: number }[] = [];
+  const seed: { assetId: string; status: string; tagId: string; sensorTypeCode: string; value: number }[] = [];
   for (const [key, rec] of Object.entries(snapshot!.responses)) {
     if (!/^GET \/api\/v1\/plant\/assets\/[^/]+\/live$/.test(key) || !rec.body) continue;
-    const live = JSON.parse(rec.body) as { assetId: string; values: { tagId: string; sensorTypeCode: string; value: number | null }[] };
-    for (const v of live.values) if (v.value !== null) seed.push({ assetId: live.assetId, tagId: v.tagId, sensorTypeCode: v.sensorTypeCode, value: v.value });
+    const live = JSON.parse(rec.body) as { assetId: string; status: string; values: { tagId: string; sensorTypeCode: string; value: number | null }[] };
+    for (const v of live.values) if (v.value !== null) seed.push({ assetId: live.assetId, status: live.status, tagId: v.tagId, sensorTypeCode: v.sensorTypeCode, value: v.value });
   }
   return Response.json(seed);
 }
@@ -73,6 +73,15 @@ function lookup(code: string) {
   const lot = (body("GET /api/v1/inventory/lots") as { lotNo: string }[]).find((l) => l.lotNo.toLowerCase() === c);
   if (lot) return Response.json({ kind: "lot", item: null, lot });
   return problem(404, `An item or lot with the code '${code.trim()}' was not found.`);
+}
+
+/** The demo cameras are still pictures in public/demo-cameras (the recording keeps no image bytes), so a snapshot
+ *  request is sent on to the picture named in the asset's recorded camera settings. */
+function cameraPicture(assetId: string, url: URL) {
+  const rec = byPath!.get(`GET /api/v1/plant/assets/${assetId}/camera`);
+  const file = rec?.body ? (JSON.parse(rec.body).snapshotUrl as string | null)?.match(/\/demo-cameras\/[\w-]+\.jpg$/)?.[0] : null;
+  if (!file) return problem(404, "This machine has no camera in the online demo.");
+  return Response.redirect(new URL(file, url.origin), 302);
 }
 
 async function handle(req: Request, { params }: { params: Promise<{ path: string[] }> }) {
@@ -93,6 +102,8 @@ async function handle(req: Request, { params }: { params: Promise<{ path: string
   if (method === "POST" && route === "/api/v1/auth/logout") return new Response(null, { status: 204 });
   if (method !== "GET") return problem(403, "This is a read-only demo, so changes are switched off.");
   if (route === "/api/v1/inventory/lookup") return lookup(url.searchParams.get("code") ?? "");
+  const cam = /^\/api\/v1\/plant\/assets\/([^/]+)\/camera\/snapshot$/.exec(route);
+  if (cam) return cameraPicture(cam[1], url);
 
   const rec = byKey!.get(normalise(`GET ${route}${url.search}`)) ?? byPath!.get(`GET ${route}`);
   return rec ? reply(rec) : problem(404, "This view is not part of the online demo.");

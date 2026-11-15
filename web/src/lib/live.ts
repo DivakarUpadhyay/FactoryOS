@@ -24,7 +24,7 @@ let demoTimer: ReturnType<typeof setInterval> | null = null;
 
 function startDemo() {
   if (demoTimer) return;
-  type Seed = { assetId: string; tagId: string; sensorTypeCode: string; value: number };
+  type Seed = { assetId: string; status: string; tagId: string; sensorTypeCode: string; value: number };
   let seed: Seed[] = [];
   const counters = new Map<string, number>();
   let tick = 0;
@@ -34,18 +34,21 @@ function startDemo() {
     if (!seed.length) return;
     const ts = new Date().toISOString();
     const values: LiveValueMsg[] = seed
-      .filter(() => Math.random() < 0.4)
+      .filter((s) => s.status !== "Offline" && Math.random() < 0.4) // an offline machine sends nothing
       .map((s) => {
         let value: number;
         if (/kwh|count|total|hours|runtime/i.test(s.sensorTypeCode)) {
           value = (counters.get(s.tagId) ?? s.value) + Math.abs(s.value) * 0.00002 + Math.random() * 0.05;
           counters.set(s.tagId, value);
-        } else value = s.value * (1 + (Math.random() - 0.5) * 0.03);
+        } else if (/state|mode|code/i.test(s.sensorTypeCode)) value = s.value; // states and codes are whole numbers: keep them as recorded
+        else value = s.value * (1 + (Math.random() - 0.5) * 0.03);
         return { assetId: s.assetId, tagId: s.tagId, ts, value: Math.round(value * 1000) / 1000, quality: 0 };
       });
     subscribers.forEach((h) => h.values?.(values));
     if (tick++ % 5 === 0) {
-      const status = [...new Set(seed.map((s) => s.assetId))].map((assetId) => ({ assetId, status: "Running", lastSeenAt: ts, lastError: null }));
+      // each asset keeps the state it was recorded in (Running, Idle, Maintenance…); offline ones stay silent
+      const recorded = new Map(seed.filter((s) => s.status !== "Offline").map((s) => [s.assetId, s.status]));
+      const status = [...recorded].map(([assetId, st]) => ({ assetId, status: st, lastSeenAt: ts, lastError: null }));
       subscribers.forEach((h) => h.status?.(status));
     }
   }, 2000);

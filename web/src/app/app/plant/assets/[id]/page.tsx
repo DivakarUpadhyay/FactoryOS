@@ -145,8 +145,8 @@ function LiveTab({ assetId }: { assetId: string }) {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {live.values.map((v) => {
-            const pts = (history[v.tagId] ?? []).map((h) => ({ t: new Date(h.ts + "Z").getTime(), v: h.value }));
-            if (v.ts && v.value !== null) pts.push({ t: new Date(v.ts + "Z").getTime(), v: v.value });
+            const pts = (history[v.tagId] ?? []).map((h) => ({ t: utcMs(h.ts), v: h.value }));
+            if (v.ts && v.value !== null) pts.push({ t: utcMs(v.ts), v: v.value });
             return (
               <div key={v.tagId} className="rounded-xl border border-line bg-panel p-3">
                 <div className="flex items-center justify-between text-xs text-muted">
@@ -168,7 +168,12 @@ function LiveTab({ assetId }: { assetId: string }) {
 }
 
 function stateName(v: number | null) {
-  return ["Offline", "Idle", "Running", "Stopped", "Fault", "Maintenance"][v ?? 0] ?? String(v);
+  return ["Offline", "Idle", "Running", "Stopped", "Fault", "Maintenance"][Math.round(v ?? 0)] ?? String(v);
+}
+
+/** API times are UTC without a zone; live-hub times already end in Z. */
+function utcMs(iso: string) {
+  return new Date(/Z$|[+-]\d{2}:\d{2}$/.test(iso) ? iso : iso + "Z").getTime();
 }
 
 // ---------------------------------------------------------------- tags
