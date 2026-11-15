@@ -3,13 +3,14 @@
 // demo needs no backend. Every timestamp is moved forward by the time since recording, so the data always looks current.
 import { readFileSync } from "fs";
 import path from "path";
+import { DEMO_ACCOUNTS, DEMO_PASSWORD, demoAccountByEmail, type DemoAccount } from "@/lib/demo-accounts";
+import { allPermissions, audit, missingPermission, report, roles, schedules, toCsv, users } from "@/lib/demo-extras";
 
 export const dynamic = "force-dynamic";
 
 type Recorded = { status: number; type: string; body?: string; b64?: string };
 type Snapshot = { recordedAt: string; responses: Record<string, Recorded> };
 
-const DEMO_USER = { email: "demo@divakar-demo.local", password: "FactoryDemo@2026" };
 const ENABLED = process.env.NEXT_PUBLIC_DEMO === "1";
 
 let snapshot: Snapshot | null = null;
@@ -84,6 +85,37 @@ function cameraPicture(assetId: string, url: URL) {
   return Response.redirect(new URL(file, url.origin), 302);
 }
 
+// ---------- one sign-in per role ----------
+// The recorded sign-in belongs to the viewer. For each demo role the token and /auth/me are rebuilt with that role's
+// name, email and permissions, so the app shows exactly the menus and buttons the role would get from the real API.
+const b64url = (o: object) => Buffer.from(JSON.stringify(o)).toString("base64url");
+
+function tokenFor(a: DemoAccount) {
+  const now = Math.floor(Date.now() / 1000);
+  const payload = { sub: a.userId, email: a.email, name: a.displayName, sa: "0", tid: "4acf7dd5-a3f0-4958-afaa-c19dd909074c",
+    perm: a.permissions, jti: crypto.randomUUID().replace(/-/g, ""), nbf: now, exp: now + 3600, iss: "divakar-factoryos", aud: "divakar-factoryos" };
+  return `${b64url({ alg: "HS256", typ: "JWT" })}.${b64url(payload)}.online-demo`;
+}
+
+function accountFromToken(req: Request): DemoAccount | null {
+  const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  try {
+    const payload = JSON.parse(Buffer.from(token!.split(".")[1], "base64url").toString("utf8"));
+    return demoAccountByEmail(payload.email) ?? null;
+  } catch { return null; }
+}
+
+function meFor(a: DemoAccount) {
+  const me = JSON.parse(byPath!.get("GET /api/v1/auth/me")!.body!);
+  return { ...me, userId: a.userId, email: a.email, displayName: a.displayName, permissions: a.permissions };
+}
+
+function signIn(a: DemoAccount) {
+  const recorded = JSON.parse(byPath!.get("POST /api/v1/auth/login")!.body!);
+  return Response.json({ ...recorded, accessToken: tokenFor(a), accessTokenExpiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+    refreshToken: `online-demo.${a.role}`, user: { ...recorded.user, ...meFor(a) } });
+}
+
 async function handle(req: Request, { params }: { params: Promise<{ path: string[] }> }) {
   if (!ENABLED) return problem(404, "Not found");
   load();
@@ -94,13 +126,39 @@ async function handle(req: Request, { params }: { params: Promise<{ path: string
   if (method === "GET" && route === "/api/v1/demo/live-seed") return liveSeed();
   if (method === "POST" && route === "/api/v1/auth/login") {
     const body = await req.json().catch(() => ({}));
-    if (body.email?.trim().toLowerCase() !== DEMO_USER.email || body.password !== DEMO_USER.password)
-      return problem(401, "This online demo signs in with the demo account shown on this page.");
-    return reply(byPath!.get(`POST ${route}`)!);
+    const account = demoAccountByEmail(body.email);
+    if (!account || body.password !== DEMO_PASSWORD)
+      return problem(401, "This online demo signs in with one of the demo accounts shown on this page.");
+    return signIn(account);
   }
-  if (method === "POST" && route === "/api/v1/auth/refresh") return reply(byPath!.get(`POST ${route}`)!);
+  if (method === "POST" && route === "/api/v1/auth/refresh") {
+    const body = await req.json().catch(() => ({}));
+    const account = DEMO_ACCOUNTS.find((a) => body.refreshToken === `online-demo.${a.role}`);
+    return account ? signIn(account) : problem(401, "Please sign in again.");
+  }
   if (method === "POST" && route === "/api/v1/auth/logout") return new Response(null, { status: 204 });
-  if (method !== "GET") return problem(403, "This is a read-only demo, so changes are switched off.");
+
+  const account = accountFromToken(req);
+  if (route === "/api/v1/auth/me") return account ? Response.json(meFor(account)) : problem(401, "Please sign in.");
+  if (account) {
+    const need = missingPermission(route, account);
+    if (need) return problem(403, `The ${account.roleName} role does not have the ${need} permission.`);
+  }
+  if (method !== "GET") return problem(403, `This is a read-only online demo, so changes are switched off (signed in as ${account?.roleName ?? "guest"}).`);
+
+  if (route === "/api/v1/users") return Response.json(users());
+  if (route === "/api/v1/roles") return Response.json(roles());
+  if (route === "/api/v1/roles/permissions") return Response.json(allPermissions());
+  if (route === "/api/v1/audit") return Response.json(audit(url));
+  if (route === "/api/v1/reports/schedules") return Response.json(schedules());
+  const rep = /^\/api\/v1\/reports\/(production|energy|maintenance|quality|alarms)$/.exec(route);
+  if (rep) {
+    const r = report(rep[1], url, (k) => { const x = byPath!.get(k); return x?.body ? JSON.parse(x.body) : null; });
+    if (!r) return problem(404, "This report is not part of the online demo.");
+    if (url.searchParams.get("format") === "csv")
+      return new Response(toCsv(r), { headers: { "Content-Type": "text/csv", "Content-Disposition": `attachment; filename="${rep[1]}-report.csv"` } });
+    return Response.json(r);
+  }
   if (route === "/api/v1/inventory/lookup") return lookup(url.searchParams.get("code") ?? "");
   const cam = /^\/api\/v1\/plant\/assets\/([^/]+)\/camera\/snapshot$/.exec(route);
   if (cam) return cameraPicture(cam[1], url);

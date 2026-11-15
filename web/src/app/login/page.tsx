@@ -8,9 +8,12 @@ import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { Button, ErrorNote, Field, Input, errorText } from "@/components/ui";
 import { LogoMark } from "@/components/logo";
+import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "@/lib/demo-accounts";
 
 // Public read-only account in the demo factory (Viewer role; the API blocks password and 2FA changes for it).
 const DEMO = { email: "demo@divakar-demo.local", password: "FactoryDemo@2026" };
+// The hosted online demo (NEXT_PUBLIC_DEMO=1) has one sign-in per role.
+const ONLINE_DEMO = process.env.NEXT_PUBLIC_DEMO === "1";
 
 export default function LoginPage() {
   const { login, verifyCode, me } = useAuth();
@@ -115,6 +118,22 @@ export default function LoginPage() {
                 {busy ? "Signing in…" : "Sign in"}
               </Button>
               <p className="text-center text-sm"><Link href="/forgot" className="text-muted hover:text-brand">Forgot password?</Link></p>
+              {ONLINE_DEMO ? (
+              <div className="rounded-lg border border-line bg-panel-2 p-3 text-sm">
+                <p className="font-medium">Try the demo: sign in as any role</p>
+                <p className="mt-1 text-muted">Password for every role: <span className="font-mono text-ink">{DEMO_PASSWORD}</span>. Each role sees only its own menus and actions.</p>
+                <div className="mt-2 grid gap-1.5">
+                  {DEMO_ACCOUNTS.map((a) => (
+                    <button key={a.role} type="button" data-role={a.role}
+                      className={`rounded-md border px-2.5 py-1.5 text-left hover:border-brand ${email === a.email ? "border-brand bg-brand/10" : "border-line bg-panel"}`}
+                      onClick={() => { setEmail(a.email); setPassword(DEMO_PASSWORD); setError(null); }}>
+                      <span className="font-medium">{a.roleName}</span>
+                      <span className="block text-xs text-muted">{a.email} · {a.sees}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              ) : (
               <div className="rounded-lg border border-line bg-panel-2 p-3 text-sm">
                 <p className="font-medium">Try the demo (read only)</p>
                 <p className="mt-1 text-muted">
@@ -126,6 +145,7 @@ export default function LoginPage() {
                   Use demo login
                 </Button>
               </div>
+              )}
             </>
           )}
           {needsSetup && (
